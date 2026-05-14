@@ -1,0 +1,9 @@
+{
+  "name": "pi-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart proxy routing for pi — rule-based direct/proxy/fallback per domain",
+  "dependencies": {
+    "undici": "^7.0.0"
+  }
+}
