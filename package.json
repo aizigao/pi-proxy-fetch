@@ -1,0 +1,31 @@
+{
+  "name": "@aizigao/pi-proxy-fetch",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "keywords": ["pi-package"],
+  "scripts": {
+    "check": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "undici": "^7.16.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@types/node": "^24.10.1",
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4"
+  }
+}
