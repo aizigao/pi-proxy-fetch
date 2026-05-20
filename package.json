@@ -1,6 +1,6 @@
 {
   "name": "@aizigao/pi-proxy-fetch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pi extension package that routes globalThis.fetch through direct, proxy, or fallback behavior based on hostname rules.",
   "type": "module",
   "license": "MIT",

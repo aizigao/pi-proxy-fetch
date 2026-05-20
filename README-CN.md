@@ -52,28 +52,11 @@ English: [`README.md`](./README.md)
 
 ## 安装
 
-### 本地开发
+### 通过 Pi 安装
 
 ```bash
-cd /Users/aizigao/MyWorkSpace/github_mine/pi-proxy-fetch
-npm install
+pi install npm:@aizigao/pi-proxy-fetch
 ```
-
-### 从 npm 安装
-
-```bash
-npm install @aizigao/pi-proxy-fetch
-```
-
-### 作为 Pi 包使用
-
-这个仓库按 Pi package 结构组织：
-
-- 包名：`@aizigao/pi-proxy-fetch`
-- 扩展入口：`./index.ts`
-- Pi 包声明：`package.json#pi.extensions`
-
-具体如何在你的环境中加载，取决于你本地管理 Pi 包的方式。
 
 ## 配置
 
@@ -218,7 +201,6 @@ npm publish
 - `fallback` 会对更宽泛的非 abort 错误进行代理重试
 - 代理请求显式使用 `undici.fetch`
 
-因此它更接近你原本的本地实现，但同时被整理成了标准的 npm / Pi package 结构。
 
 ## License
 

@@ -52,28 +52,11 @@ This is intentionally a network-layer fetch router. It is not a search tool and 
 
 ## Installation
 
-### Local development
+### Install with Pi
 
 ```bash
-cd /Users/aizigao/MyWorkSpace/github_mine/pi-proxy-fetch
-npm install
+pi install npm:@aizigao/pi-proxy-fetch
 ```
-
-### Install from npm
-
-```bash
-npm install @aizigao/pi-proxy-fetch
-```
-
-### Use as a Pi package
-
-This repository is structured as a Pi package:
-
-- package name: `@aizigao/pi-proxy-fetch`
-- extension entry: `./index.ts`
-- package metadata: `package.json#pi.extensions`
-
-How you load it depends on how you manage local Pi packages in your environment.
 
 ## Publishing
 
@@ -217,8 +200,6 @@ This package intentionally preserves the existing local behavior instead of full
 - wildcard matching uses regex conversion
 - fallback retries a broader set of non-abort failures
 - proxy requests explicitly use `undici.fetch`
-
-That makes this package closer to the original local implementation while still being structured as a normal npm/Pi package.
 
 ## License
 
