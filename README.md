@@ -1,6 +1,10 @@
 # @aizigao/pi-proxy-fetch
 
+中文文档：[`README-CN.md`](./README-CN.md)
+
 A Pi extension package that routes `globalThis.fetch` through direct, proxy, or direct-with-proxy-fallback behavior based on hostname rules.
+
+Forked from [`haokanjiang/pi-proxy`](https://github.com/haokanjiang/pi-proxy) and adapted to preserve this package's current local routing behavior and packaging structure.
 
 This package keeps the current local routing model intact:
 - config file lives at `~/.pi/agent/proxy.json`
@@ -40,6 +44,12 @@ This is intentionally a network-layer fetch router. It is not a search tool and 
 - Pi coding agent installed
 - A Pi agent config directory at `~/.pi/agent`
 
+## Repository
+
+- GitHub: https://github.com/aizigao/pi-proxy-fetch
+- Issues: https://github.com/aizigao/pi-proxy-fetch/issues
+- npm package: `@aizigao/pi-proxy-fetch`
+
 ## Installation
 
 ### Local development
@@ -47,6 +57,12 @@ This is intentionally a network-layer fetch router. It is not a search tool and 
 ```bash
 cd /Users/aizigao/MyWorkSpace/github_mine/pi-proxy-fetch
 npm install
+```
+
+### Install from npm
+
+```bash
+npm install @aizigao/pi-proxy-fetch
 ```
 
 ### Use as a Pi package
@@ -58,6 +74,23 @@ This repository is structured as a Pi package:
 - package metadata: `package.json#pi.extensions`
 
 How you load it depends on how you manage local Pi packages in your environment.
+
+## Publishing
+
+Before publishing, verify:
+
+```bash
+npm run check
+npm run lint
+```
+
+Then publish:
+
+```bash
+npm publish
+```
+
+This package is configured as a public scoped package.
 
 ## Configuration
 
@@ -189,4 +222,4 @@ That makes this package closer to the original local implementation while still 
 
 ## License
 
-Not added yet.
+MIT
