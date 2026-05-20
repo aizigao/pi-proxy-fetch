@@ -1,0 +1,23 @@
+package.json
+  s_51c811bfade265::t_697caeb70fc1f8 2
+.gitignore
+  s_51c811bfade265::t_58e81468f632bd 1-6
+README.md
+  s_51c811bfade265::t_5f5b5bec9c1fe0 1-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "e25324b850e539cf849f2e6f3fb7c27e8d8260b9",
+  "prompts": {},
+  "sessions": {
+    "s_51c811bfade265": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e44a3-eb8c-7c83-9d56-2e998d49f1ff",
+        "model": "zyb-gpt"
+      },
+      "human_author": "aizigao <weixiangzhe@live.com>"
+    }
+  }
+}
