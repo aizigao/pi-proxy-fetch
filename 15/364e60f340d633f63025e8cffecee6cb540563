@@ -1,0 +1,21 @@
+README.md
+  s_51c811bfade265::t_9877b16cdce6e7 55,58
+README-CN.md
+  s_51c811bfade265::t_d9ba8929354b24 55,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "15364e60f340d633f63025e8cffecee6cb540563",
+  "prompts": {},
+  "sessions": {
+    "s_51c811bfade265": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e44a3-eb8c-7c83-9d56-2e998d49f1ff",
+        "model": "zyb-gpt"
+      },
+      "human_author": "aizigao <weixiangzhe@live.com>"
+    }
+  }
+}
