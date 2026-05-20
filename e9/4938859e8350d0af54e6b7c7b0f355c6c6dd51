@@ -1,0 +1,31 @@
+CHANGELOG.md
+  s_51c811bfade265::t_05092deb7ad8fc 1-14
+README.md
+  s_51c811bfade265::t_753c080c1388dd 47-52,62-67,78-94,225
+  s_51c811bfade265::t_d791d173cebd58 3-4
+  s_51c811bfade265::t_54be59119b27fd 7-8
+LICENSE
+  s_51c811bfade265::t_94363eff3c0752 1-21
+package.json
+  s_51c811bfade265::t_477c86705b3edf 4,6-32
+README-CN.md
+  s_51c811bfade265::t_f89cbb34a8c3a8 7-8
+  s_51c811bfade265::t_f4d66d36a1f4e7 1-2,5-6,9-225
+  s_51c811bfade265::t_fb41918160765d 3-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "e94938859e8350d0af54e6b7c7b0f355c6c6dd51",
+  "prompts": {},
+  "sessions": {
+    "s_51c811bfade265": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e44a3-eb8c-7c83-9d56-2e998d49f1ff",
+        "model": "zyb-gpt"
+      },
+      "human_author": "aizigao <weixiangzhe@live.com>"
+    }
+  }
+}
