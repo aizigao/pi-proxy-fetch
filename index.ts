@@ -161,7 +161,7 @@ export default function (pi: ExtensionAPI) {
       return agent;
     };
 
-    globalThis.fetch = (async (input, init) => {
+    const patchedFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const url = new URL(getUrlString(input));
       const config = readProxyConfig();
 
@@ -195,6 +195,12 @@ export default function (pi: ExtensionAPI) {
         return undiciFetch(input, { ...init, dispatcher } as RequestInit);
       }
     }) as typeof fetch;
+
+    // Delay patch to survive configureHttpDispatcher() -> undici.install()
+    // which replaces globalThis.fetch after extensions load (main.js:488).
+    setTimeout(() => {
+      globalThis.fetch = patchedFetch;
+    }, 0);
 
     restoreFetch = () => {
       globalThis.fetch = originalFetch;
