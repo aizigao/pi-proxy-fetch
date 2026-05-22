@@ -1,0 +1,22 @@
+index.ts
+  s_1af358689053bb::t_8d44fe3d7b767e 164
+  s_1af358689053bb::t_d7d0461f49d479 199-204
+CHANGELOG.md
+  s_1af358689053bb::t_5f4f42b9623e60 5-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "8c37962ed4a8ff1fa1e926fe79ac65919f075654",
+  "prompts": {},
+  "sessions": {
+    "s_1af358689053bb": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e4d81-193c-75ee-8401-f22e6a2545ca",
+        "model": "deepseek-v4-pro"
+      },
+      "human_author": "aizigao <weixiangzhe@live.com>"
+    }
+  }
+}
