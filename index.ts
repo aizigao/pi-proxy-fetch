@@ -147,7 +147,7 @@ export default function (pi: ExtensionAPI) {
   if (!patched) {
     patched = true;
 
-    const originalFetch = globalThis.fetch.bind(globalThis);
+    let underlyingFetch: typeof fetch = globalThis.fetch;
     const agentCache = new Map<string, ProxyAgent>();
 
     const getAgent = (proxyUrl: string): ProxyAgent => {
@@ -166,7 +166,7 @@ export default function (pi: ExtensionAPI) {
       const config = readProxyConfig();
 
       if (!config?.enabled || !config.proxy || !isProxyableUrl(url)) {
-        return originalFetch(input, init);
+        return underlyingFetch(input, init);
       }
 
       const action = getActionForHost(url.hostname.toLowerCase(), config);
@@ -174,7 +174,7 @@ export default function (pi: ExtensionAPI) {
 
       if (action === "direct") {
         stats.direct += 1;
-        return originalFetch(input, init);
+        return underlyingFetch(input, init);
       }
 
       if (action === "proxy") {
@@ -185,7 +185,7 @@ export default function (pi: ExtensionAPI) {
       stats.fallback += 1;
 
       try {
-        return await originalFetch(input, init);
+        return await underlyingFetch(input, init);
       } catch (error) {
         if (isAbortError(error)) {
           throw error;
@@ -196,14 +196,30 @@ export default function (pi: ExtensionAPI) {
       }
     }) as typeof fetch;
 
-    // Delay patch to survive configureHttpDispatcher() -> undici.install()
-    // which replaces globalThis.fetch after extensions load (main.js:488).
-    setTimeout(() => {
-      globalThis.fetch = patchedFetch;
-    }, 0);
+    // Install via Object.defineProperty getter/setter to survive
+    // configureHttpDispatcher() -> undici.install() and coexist with
+    // other extensions that also patch globalThis.fetch.
+    const _prevDesc = Object.getOwnPropertyDescriptor(globalThis, "fetch");
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return patchedFetch;
+      },
+      set(newFetch: typeof fetch) {
+        if (newFetch === patchedFetch) return;
+        _prevDesc?.set?.call(globalThis, newFetch);
+        underlyingFetch = newFetch;
+      },
+    });
 
     restoreFetch = () => {
-      globalThis.fetch = originalFetch;
+      Object.defineProperty(globalThis, "fetch", {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: underlyingFetch,
+      });
       patched = false;
       restoreFetch = null;
     };

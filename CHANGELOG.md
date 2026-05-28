@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2026-05-28
+
+### Fixed
+- Replace `setTimeout` + `globalThis.fetch = patchedFetch` with `Object.defineProperty`
+  getter/setter to survive `undici.install()` from `configureHttpDispatcher()` and coexist
+  with other extensions that also patch `globalThis.fetch`.
+- `originalFetch` replaced with dynamic `underlyingFetch` reference so that
+  `undici.install()` updates propagate to proxied requests.
+
 ## [0.1.2] - 2026-05-22
 
 ### Fixed
