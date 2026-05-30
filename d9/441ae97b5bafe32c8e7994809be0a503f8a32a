@@ -1,7 +1,7 @@
-index.ts
-  ai_agent 150,169,177,188,199-214,217-222
 CHANGELOG.md
   ai_agent 5-13
+index.ts
+  ai_agent 150,169,177,188,199-214,217-222
 ---
 {
   "schema_version": "authorship/3.0.0",
