@@ -1,33 +1,33 @@
+README-CN.md
+  ai_agent 5,7,9,11-15,30,32,34,36-37,39-41,44-74,80,82-86,88,90,92-93,97,99,101-105,107,109-115,117,119-123,125,127-132,134,136,138-144,150-153,160-175
 index.ts
   ai_agent 3-15,21-23,30-31,35-37,40,42,51,57,61,65-69,71,75-80,82,91,108,110-117,121-141,145,147-154,159-160,165-167,169-249,252,254-255,259-296,300,302,305
-lib/stats.ts
-  ai_agent 1-14
+lib/router.ts
+  ai_agent 1-86
+package-lock.json
+  ai_agent 2-3,8-11,13,24-26,2574-2577
+.pi/proxy.jsonc
+  ai_agent 2,9,13-14,20-82
+scripts/setup-hooks.sh
+  ai_agent 1-18
 schema.json
   ai_agent 1-151
+lib/config.ts
+  ai_agent 1-437
+scripts/setup-hooks.js
+  ai_agent 1-24
+SPEC.md
+  ai_agent 64,108-110,112,114-116,156,159-160,163-167,244,246-250,254-257,318-320
+scripts/generate-schema.js
+  ai_agent 1-152
+lib/stats.ts
+  ai_agent 1-14
 package.json
   ai_agent 24-25,38-40,48,57
 lib/conditions.ts
   ai_agent 1-176
-scripts/generate-schema.js
-  ai_agent 1-152
-scripts/setup-hooks.sh
-  ai_agent 1-18
 README.md
   ai_agent 5,9,11-15,30,32,34,36-37,39-41,44-74,80,82-86,88,90,92-93,97,99,101-105,107,109-115,117,119-123,125,127-132,134,136,138-144,150-153,160-175
-.pi/proxy.jsonc
-  ai_agent 2,9,13-14,20-82
-SPEC.md
-  ai_agent 64,108-110,112,114-116,156,159-160,163-167,244,246-250,254-257,318-320
-lib/config.ts
-  ai_agent 1-437
-lib/router.ts
-  ai_agent 1-86
-README-CN.md
-  ai_agent 5,7,9,11-15,30,32,34,36-37,39-41,44-74,80,82-86,88,90,92-93,97,99,101-105,107,109-115,117,119-123,125,127-132,134,136,138-144,150-153,160-175
-package-lock.json
-  ai_agent 2-3,8-11,13,24-26,2574-2577
-scripts/setup-hooks.js
-  ai_agent 1-24
 ---
 {
   "schema_version": "authorship/3.0.0",
