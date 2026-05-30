@@ -37,16 +37,6 @@
 
   // Profile 列表
   "profileConfig": [
-    // 内置：直连
-    {
-      "name": "[Build In]: direct",
-      "type": "proxy_server"
-    },
-    // 内置：系统代理
-    {
-      "name": "[Build In]: System Proxy",
-      "type": "proxy_server"
-    },
     // 自定义代理：Clash
     {
       "name": "my clash",
@@ -63,20 +53,17 @@
     {
       "name": "auto switch",
       "type": "autoSwitch",
-      "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
       "switchRules": [
         {
-          "note": "局域网直连",
           "conditions": [
             {
               "conditionType": "HostWildcardCondition",
               "pattern": "*.local"
             }
           ],
-          "profileName": "[Build In]: direct"
+          "profileName": "direct"
         },
         {
-          "note": "Google 走 Clash",
           "conditions": [
             {
               "conditionType": "UrlWildcardCondition",
@@ -86,8 +73,6 @@
           "profileName": "my clash"
         },
         {
-          // catch-all：未命中其他规则的请求
-          "note": "默认走 Clash",
           "conditions": [
             {
               "conditionType": "HostWildcardCondition",
@@ -120,12 +105,15 @@
 | `ruleListURL` | `string?` | （autoSwitch 类型，可选）远程规则列表 URL |
 | `switchRules` | `SwitchRule[]?` | （autoSwitch 类型）本地规则列表 |
 
-### 内置 Profile
+### 内置 Profile（代码内部处理，不出现在配置文件中）
 
-| name | 行为 |
+switchRules 中 `profileName` 可使用以下保留名：
+
+| profileName | 行为 |
 |---|---|
-| `[Build In]: direct` | 直连，不走代理 |
-| `[Build In]: System Proxy` | 读取系统代理设置（通过 `HTTP_PROXY` / `HTTPS_PROXY` 环境变量） |
+| `direct` | 直连，不走代理 |
+| `system` | 读取系统代理设置（`HTTP_PROXY` / `HTTPS_PROXY` 环境变量） |
+| 其他 | 在 `profileConfig` 中查找对应的 `proxy_server`，取其 `server` 字段 |
 
 ### SwitchRule 字段
 
@@ -165,18 +153,18 @@
 ### /proxy 命令
 
 ```
-/proxy              → 交互菜单（显示当前 profile、切换、统计、规则）
+/proxy              → 交互菜单
 /proxy <profile>    → 切换激活的 profile（如 /proxy "my clash"）
 /proxy stats        → 显示统计
-/proxy rules        → 显示当前激活 profile 的规则列表
-/proxy reload       → 重新加载 proxy.jsonc
+/proxy rules        → 显示当前 autoSwitch profile 的 switchRules
+/proxy reload       → 重新加载配置
 ```
 
-交互菜单项：
-- 列出所有 profile（高亮当前激活的），选择后切换
-- `Show stats`
-- `Show rules`（显示当前 autoSwitch profile 的 switchRules）
-- `Reload config`
+**交互菜单项**（在现有基础上扩展）：
+- 列出所有 profile，高亮当前激活的——选择后切换并写回 `profile_name`
+- `Show stats`（保留）
+- `Show rules`（调整为显示 autoSwitch 的 switchRules）
+- `Reload config`（保留）
 
 ## Project Structure
 
@@ -253,18 +241,20 @@ function resolveProfile(config: ProxyConfig): Profile | undefined {
   return config.profileConfig.find(p => p.name === config.profile_name);
 }
 
-function resolveProxyServer(config: ProxyConfig, profile?: Profile): string | undefined {
+function resolveProxyServer(config: ProxyConfig, profileName: string): string | undefined {
   // 解析最终使用的代理地址：
-  //   [Build In]: direct → undefined（直连）
-  //   [Build In]: System Proxy → process.env.HTTP_PROXY || process.env.HTTPS_PROXY
-  //   其他 proxy_server → profile.server
-  if (!profile || profile.type !== "proxy_server") return undefined;
-  if (profile.name === "[Build In]: direct") return undefined;
-  if (profile.name === "[Build In]: System Proxy") {
+  //   direct → undefined（直连）
+  //   system → process.env.HTTP_PROXY || process.env.HTTPS_PROXY
+  //   其他   → 在 profileConfig 中查找 proxy_server，取其 server 字段
+  if (profileName === "direct") return undefined;
+  if (profileName === "system") {
     const envProxy = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
     return envProxy ?? undefined;
   }
-  return profile.server;
+  const profile = config.profileConfig.find(
+    p => p.name === profileName && p.type === "proxy_server"
+  );
+  return profile?.server;
 }
 ```
 
@@ -325,8 +315,9 @@ function resolveProxyServer(config: ProxyConfig, profile?: Profile): string | un
 - fetch patch：根据解析结果选择 raw fetch / undici Fetch + ProxyAgent
 
 ### Phase 4: 命令与迁移 (`index.ts`)
-- `/proxy` 命令更新：列出 profile + 切换
-- `/proxy rules` 显示当前 autoSwitch 的规则
+- 现有 `/proxy` 交互菜单增加 profile 列表和切换选项
+- 新增 `/proxy <profile>` 子命令快速切换
+- `/proxy rules` 调整为显示 autoSwitch 的 switchRules
 - 旧格式自动迁移逻辑
 - System Proxy 环境变量读取
 - README 更新

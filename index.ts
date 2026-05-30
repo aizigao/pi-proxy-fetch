@@ -1,150 +1,45 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { ProxyAgent, fetch as undiciFetch } from "undici";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  readConfig,
+  reloadConfig,
+  writeConfig,
+  resolveProfile,
+} from "./lib/config.js";
+import type { ProxyConfig } from "./lib/config.js";
+import { routeRequest } from "./lib/router.js";
+import { formatStats } from "./lib/stats.js";
 
-type ProxyAction = "direct" | "proxy" | "fallback";
-
-type ProxyRule = {
-  match?: string;
-  action?: ProxyAction;
-  comment?: string;
-};
-
-type ProxyConfig = {
-  enabled?: boolean;
-  proxy?: string;
-  mode?: ProxyAction;
-  rules?: ProxyRule[];
-};
-
-type ProxyStats = {
-  direct: number;
-  proxy: number;
-  fallback: number;
-  fallbackHit: number;
-};
-
-declare const process:
-  | {
-      env?: Record<string, string | undefined>;
-    }
-  | undefined;
-
-const stats: ProxyStats = {
-  direct: 0,
-  proxy: 0,
-  fallback: 0,
-  fallbackHit: 0,
-};
+// =============================================================================
+// State
+// =============================================================================
 
 let currentConfig: ProxyConfig | null = null;
 let patched = false;
 let restoreFetch: (() => void) | null = null;
 
-function getAgentDir(): string {
-  return process?.env?.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
-}
-
-function getProxyConfigPath(): string {
-  return join(getAgentDir(), "proxy.json");
-}
-
-function readProxyConfig(): ProxyConfig | null {
-  const configPath = getProxyConfigPath();
-  if (!existsSync(configPath)) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(readFileSync(configPath, "utf8")) as ProxyConfig;
-  } catch {
-    return null;
-  }
-}
-
-function matchesPattern(hostname: string, pattern: string): boolean {
-  if (!pattern || pattern === "*") {
-    return true;
-  }
-
-  if (!pattern.includes("*")) {
-    return hostname === pattern;
-  }
-
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-  return new RegExp(`^${escaped}$`, "i").test(hostname);
-}
-
-function getActionForHost(hostname: string, config: ProxyConfig): ProxyAction {
-  for (const rule of config.rules ?? []) {
-    if (!rule.match || !rule.action) {
-      continue;
-    }
-
-    const patterns = rule.match
-      .split(",")
-      .map((part) => part.trim().toLowerCase())
-      .filter(Boolean);
-
-    if (patterns.some((pattern) => matchesPattern(hostname, pattern))) {
-      return rule.action;
-    }
-  }
-
-  return config.mode ?? "direct";
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
-}
+// =============================================================================
+// Helpers
+// =============================================================================
 
 function isProxyableUrl(url: URL): boolean {
   return url.protocol === "http:" || url.protocol === "https:";
 }
 
 function getUrlString(input: Parameters<typeof fetch>[0]): string {
-  if (typeof input === "string") {
-    return input;
-  }
-
-  if (input instanceof URL) {
-    return input.toString();
-  }
-
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
   return input.url;
 }
 
-function formatStats(): string {
-  return `direct: ${stats.direct} | proxy: ${stats.proxy} | fallback: ${stats.fallback} (hit: ${stats.fallbackHit})`;
-}
-
-function writeProxyConfig(config: ProxyConfig): void {
-  writeFileSync(getProxyConfigPath(), `${JSON.stringify(config, null, 2)}\n`, "utf8");
-}
-
-function formatRules(config: ProxyConfig | null): string {
-  if (!config) {
-    return `config missing: ${getProxyConfigPath()}`;
-  }
-
-  const status = config.enabled ? "ON" : "OFF";
-  const proxy = config.proxy ?? "(unset)";
-  const mode = config.mode ?? "direct";
-  const rules = (config.rules ?? []).map((rule) => {
-    const action = (rule.action ?? mode).padEnd(8);
-    const match = rule.match ?? "(empty)";
-    const comment = rule.comment ? `  # ${rule.comment}` : "";
-    return `${action} ${match}${comment}`;
-  });
-
-  return [`[${status}] ${proxy} mode=${mode}`, ...rules].join("\n");
-}
+// =============================================================================
+// Extension entry
+// =============================================================================
 
 export default function (pi: ExtensionAPI) {
-  currentConfig = readProxyConfig();
+  currentConfig = readConfig();
 
+  // ---- Fetch patch ----
   if (!patched) {
     patched = true;
 
@@ -153,54 +48,38 @@ export default function (pi: ExtensionAPI) {
 
     const getAgent = (proxyUrl: string): ProxyAgent => {
       const cached = agentCache.get(proxyUrl);
-      if (cached) {
-        return cached;
-      }
-
+      if (cached) return cached;
       const agent = new ProxyAgent(proxyUrl);
       agentCache.set(proxyUrl, agent);
       return agent;
     };
 
-    const patchedFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const patchedFetch = async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const url = new URL(getUrlString(input));
       const config = currentConfig;
 
-      if (!config?.enabled || !config.proxy || !isProxyableUrl(url)) {
+      if (!config || !isProxyableUrl(url)) {
         return underlyingFetch(input, init);
       }
 
-      const action = getActionForHost(url.hostname.toLowerCase(), config);
-      const dispatcher = getAgent(config.proxy);
+      const result = routeRequest(
+        config,
+        url.toString(),
+        url.hostname.toLowerCase(),
+      );
 
-      if (action === "direct") {
-        stats.direct += 1;
+      if (result.action === "direct") {
         return underlyingFetch(input, init);
       }
 
-      if (action === "proxy") {
-        stats.proxy += 1;
-        return undiciFetch(input, { ...init, dispatcher } as RequestInit);
-      }
+      const dispatcher = getAgent(result.server);
+      return undiciFetch(
+        input as Parameters<typeof undiciFetch>[0],
+        { ...init, dispatcher } as Parameters<typeof undiciFetch>[1],
+      );
+    };
 
-      stats.fallback += 1;
-
-      try {
-        return await underlyingFetch(input, init);
-      } catch (error) {
-        if (isAbortError(error)) {
-          throw error;
-        }
-
-        stats.fallbackHit += 1;
-        return undiciFetch(input, { ...init, dispatcher } as RequestInit);
-      }
-    }) as typeof fetch;
-
-    // Install via Object.defineProperty getter/setter to survive
-    // configureHttpDispatcher() -> undici.install() and coexist with
-    // other extensions that also patch globalThis.fetch.
-    const _prevDesc = Object.getOwnPropertyDescriptor(globalThis, "fetch");
+    const prevDesc = Object.getOwnPropertyDescriptor(globalThis, "fetch");
     Object.defineProperty(globalThis, "fetch", {
       configurable: true,
       enumerable: true,
@@ -209,7 +88,7 @@ export default function (pi: ExtensionAPI) {
       },
       set(newFetch: typeof fetch) {
         if (newFetch === patchedFetch) return;
-        _prevDesc?.set?.call(globalThis, newFetch);
+        prevDesc?.set?.call(globalThis, newFetch);
         underlyingFetch = newFetch;
       },
     });
@@ -226,45 +105,150 @@ export default function (pi: ExtensionAPI) {
     };
   }
 
+  // ---- Register commands ----
   pi.registerCommand("proxy", {
-    description: "Proxy settings",
-    handler: async (_args, ctx) => {
-      currentConfig = readProxyConfig();
-      const status = currentConfig?.enabled ? "ON" : "OFF";
-      const proxy = currentConfig?.proxy ?? "(unset)";
-      const toggleLabel = currentConfig?.enabled ? "Turn OFF" : "Turn ON";
-
-      const choice = await ctx.ui.select(`proxy [${status}] ${proxy}`, [
-        toggleLabel,
-        "Show stats",
-        "Reload config",
-        "Show rules",
-      ]);
-
-      if (!choice) {
+    description: "Proxy profile switcher and settings",
+    handler: async (args, ctx) => {
+      const config = currentConfig;
+      if (!config) {
+        ctx.ui.notify(
+          "No proxy config found. Create ~/.pi/proxy.jsonc",
+          "warning",
+        );
         return;
       }
 
-      if (choice === toggleLabel) {
-        if (!currentConfig) {
-          ctx.ui.notify(`Config missing: ${getProxyConfigPath()}`, "warning");
+      const argStr = args.trim();
+
+      // /proxy <profile> — switch profile directly
+      if (
+        argStr &&
+        argStr !== "stats" &&
+        argStr !== "rules" &&
+        argStr !== "reload"
+      ) {
+        const targetName = argStr;
+
+        const isReserved = targetName === "direct" || targetName === "system";
+        const inConfig = config.profileConfig.some(
+          (p) => p.name === targetName,
+        );
+
+        if (!isReserved && !inConfig) {
+          ctx.ui.notify(
+            `Unknown profile: "${targetName}". Use /proxy to list available profiles.`,
+            "warning",
+          );
           return;
         }
 
-        const nextEnabled = !currentConfig.enabled;
-        const nextConfig = {
-          ...currentConfig,
-          enabled: nextEnabled,
-        };
-
+        config.profile_name = targetName;
         try {
-          writeProxyConfig(nextConfig);
-          currentConfig = nextConfig;
-          ctx.ui.notify(`proxy: ${nextEnabled ? "ON" : "OFF"}`, "success");
-        } catch (error) {
-          ctx.ui.notify(error instanceof Error ? `Failed to write config: ${error.message}` : "Failed to write config", "error");
+          writeConfig(config);
+          currentConfig = readConfig();
+          ctx.ui.notify(`Switched to "${targetName}"`, "info");
+        } catch (err) {
+          ctx.ui.notify(
+            `Failed to switch profile: ${err instanceof Error ? err.message : String(err)}`,
+            "error",
+          );
         }
         return;
+      }
+
+      // /proxy stats
+      if (argStr === "stats") {
+        ctx.ui.notify(formatStats(), "info");
+        return;
+      }
+
+      // /proxy reload
+      if (argStr === "reload") {
+        currentConfig = reloadConfig();
+        if (!currentConfig) {
+          ctx.ui.notify("Config not found or invalid.", "warning");
+          return;
+        }
+        ctx.ui.notify(
+          `Config reloaded (${currentConfig.profileConfig.length} profiles)`,
+          "info",
+        );
+        return;
+      }
+
+      // /proxy rules
+      if (argStr === "rules") {
+        const profile = resolveProfile(config);
+        if (profile?.type === "autoSwitch" && profile.switchRules) {
+          const rulesText = profile.switchRules
+            .map((rule, i) => {
+              const conds = (rule.conditions ?? [])
+                .map((c) =>
+                  c.conditionType === "DisabledCondition"
+                    ? "Disabled"
+                    : `${c.conditionType}: ${c.pattern ?? "*"}`,
+                )
+                .join(" AND ") || "(always)";
+              const note = rule.note ? `  # ${rule.note}` : "";
+              return `[${i + 1}] ${conds}  →  ${rule.profileName}${note}`;
+            })
+            .join("\n");
+          ctx.ui.notify(
+            `[${profile.name}]\n${rulesText || "(empty)"}`,
+            "info",
+          );
+        } else {
+          ctx.ui.notify(
+            `Current profile "${config.profile_name}" is not an autoSwitch profile.`,
+            "info",
+          );
+        }
+        return;
+      }
+
+      // /proxy — interactive menu
+      const currentName = config.profile_name;
+
+      interface ProfileItem {
+        name: string;
+        note: string;
+      }
+      const profileList: ProfileItem[] = [
+        { name: "direct", note: "直连（内置）" },
+        { name: "system", note: "系统代理（内置）" },
+        ...config.profileConfig.map((p) => ({
+          name: p.name,
+          note: p.type === "autoSwitch" ? "auto switch" : p.server ?? "",
+        })),
+      ];
+
+      const choices = profileList.map((p) => {
+        const marker = p.name === currentName ? "[*]" : "[ ]";
+        return `${marker} ${p.name}  —  ${p.note}`;
+      });
+
+      const choice = await ctx.ui.select(
+        `proxy [${currentName}]`,
+        [...choices, "Show stats", "Show rules", "Reload config"],
+      );
+
+      if (!choice) return;
+
+      for (const p of profileList) {
+        if (choice.includes(` ${p.name} `)) {
+          config.profile_name = p.name;
+          try {
+            writeConfig(config);
+            currentConfig = readConfig();
+            ctx.ui.notify(`Switched to "${p.name}"`, "info");
+          } catch (err) {
+            ctx.ui.notify(
+              `Failed to switch: ${err instanceof Error ? err.message : String(err)}`,
+              "error",
+            );
+          }
+          return;
+        }
       }
 
       if (choice === "Show stats") {
@@ -272,26 +256,53 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      if (choice === "Reload config") {
-        currentConfig = readProxyConfig();
-        if (!currentConfig) {
-          ctx.ui.notify(`Config missing: ${getProxyConfigPath()}`, "warning");
-          return;
+      if (choice === "Show rules") {
+        const profile = resolveProfile(config);
+        if (profile?.type === "autoSwitch" && profile.switchRules) {
+          const rulesText = profile.switchRules
+            .map((rule, i) => {
+              const conds = (rule.conditions ?? [])
+                .map((c) =>
+                  c.conditionType === "DisabledCondition"
+                    ? "Disabled"
+                    : `${c.conditionType}: ${c.pattern ?? "*"}`,
+                )
+                .join(" AND ") || "(always)";
+              const note = rule.note ? `  # ${rule.note}` : "";
+              return `[${i + 1}] ${conds}  →  ${rule.profileName}${note}`;
+            })
+            .join("\n");
+          ctx.ui.notify(
+            `[${profile.name}]\n${rulesText || "(empty)"}`,
+            "info",
+          );
+        } else {
+          ctx.ui.notify(
+            `Current profile "${config.profile_name}" is not an autoSwitch profile.`,
+            "info",
+          );
         }
-
-        ctx.ui.notify(`Config reloaded (${currentConfig.rules?.length ?? 0} rules)`, "success");
         return;
       }
 
-      ctx.ui.notify(formatRules(currentConfig), "info");
+      if (choice === "Reload config") {
+        currentConfig = reloadConfig();
+        if (!currentConfig) {
+          ctx.ui.notify("Config not found or invalid.", "warning");
+          return;
+        }
+        ctx.ui.notify("Config reloaded.", "info");
+        return;
+      }
     },
   });
 
+  // ---- Events ----
   pi.on("session_start", () => {
-    currentConfig = readProxyConfig();
+    currentConfig = readConfig();
   });
 
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", () => {
     restoreFetch?.();
   });
 }
