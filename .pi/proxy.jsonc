@@ -1,0 +1,33 @@
+{
+  "enabled": true,
+  "profile_name": "auto switch",
+  "profileConfig": [
+    // 直联
+    {
+      "type": "proxy_server",
+      "name": "[Build In]: direct",
+    },
+    // 用系统代理
+    {
+      "name": "[Build In]: System Proxy",
+      "type": "proxy_server",
+    },
+    // clash
+    {
+      "name": "my clash",
+      "type": "proxy_server",
+      "server": "socks5://127.0.0.1:7890",
+    },
+    // whistle
+    {
+      "name": "whistle",
+      "server": "http://127.0.0.1:8899",
+    },
+    {
+      "name": "auto switch",
+      "type": "autoSwitch",
+      "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
+      "switchRules": [{}],
+    },
+  ],
+}

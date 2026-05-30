@@ -1,0 +1,10 @@
+{
+  "languages": {
+    "TypeScript": {
+      "formatter": ["prettier"],
+    },
+    "JSON": {
+      "formatter": ["prettier"],
+    },
+  },
+}
