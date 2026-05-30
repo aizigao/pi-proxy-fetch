@@ -13,14 +13,14 @@ const schema = {
   title: "pi-proxy-fetch Config",
   description: "Configuration schema for @aizigao/pi-proxy-fetch proxy.jsonc",
   type: "object",
-  required: ["enabled", "profile_name", "profileConfig"],
+  required: ["enabled", "profileName", "profileConfig"],
   additionalProperties: false,
   properties: {
     enabled: {
       type: "boolean",
       description: "Global ON/OFF switch.",
     },
-    profile_name: {
+    profileName: {
       type: "string",
       description:
         'Currently active profile name. Reserved: "direct" (no proxy), "system" (system proxy).\n' +
@@ -125,17 +125,12 @@ const schema = {
     SwitchCondition: {
       title: "Switch Condition",
       type: "object",
-      required: ["conditionType"],
+      required: ["type"],
       additionalProperties: false,
       properties: {
-        conditionType: {
+        type: {
           type: "string",
-          enum: [
-            "HostWildcardCondition",
-            "UrlWildcardCondition",
-            "UrlRegexCondition",
-            "DisabledCondition",
-          ],
+          enum: ["host", "url", "regex", "disabled"],
         },
         pattern: {
           type: "string",

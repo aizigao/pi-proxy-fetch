@@ -4,25 +4,17 @@
   "title": "pi-proxy-fetch Config",
   "description": "Configuration schema for @aizigao/pi-proxy-fetch proxy.jsonc",
   "type": "object",
-  "required": [
-    "enabled",
-    "profile_name",
-    "profileConfig"
-  ],
+  "required": ["enabled", "profileName", "profileConfig"],
   "additionalProperties": false,
   "properties": {
     "enabled": {
       "type": "boolean",
       "description": "Global ON/OFF switch."
     },
-    "profile_name": {
+    "profileName": {
       "type": "string",
       "description": "Currently active profile name. Reserved: \"direct\" (no proxy), \"system\" (system proxy).\nOther values must match a name in profileConfig.",
-      "examples": [
-        "direct",
-        "system",
-        "auto switch"
-      ],
+      "examples": ["direct", "system", "auto switch"],
       "default": "auto switch"
     },
     "profileConfig": {
@@ -44,10 +36,7 @@
     "ProxyServerProfile": {
       "title": "Proxy Server Profile",
       "type": "object",
-      "required": [
-        "name",
-        "type"
-      ],
+      "required": ["name", "type"],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -67,11 +56,7 @@
     "AutoSwitchProfile": {
       "title": "Auto Switch Profile",
       "type": "object",
-      "required": [
-        "name",
-        "type",
-        "switchRules"
-      ],
+      "required": ["name", "type", "switchRules"],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -98,9 +83,7 @@
     "SwitchRule": {
       "title": "Switch Rule",
       "type": "object",
-      "required": [
-        "profileName"
-      ],
+      "required": ["profileName"],
       "additionalProperties": false,
       "properties": {
         "note": {
@@ -117,29 +100,19 @@
         "profileName": {
           "type": "string",
           "description": "Target profile when rule matches. Reserved: \"direct\", \"system\".\nOther values must match a profile name in profileConfig.",
-          "examples": [
-            "direct",
-            "system"
-          ]
+          "examples": ["direct", "system"]
         }
       }
     },
     "SwitchCondition": {
       "title": "Switch Condition",
       "type": "object",
-      "required": [
-        "conditionType"
-      ],
+      "required": ["type"],
       "additionalProperties": false,
       "properties": {
-        "conditionType": {
+        "type": {
           "type": "string",
-          "enum": [
-            "HostWildcardCondition",
-            "UrlWildcardCondition",
-            "UrlRegexCondition",
-            "DisabledCondition"
-          ]
+          "enum": ["host", "url", "regex", "disabled"]
         },
         "pattern": {
           "type": "string",

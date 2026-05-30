@@ -1,17 +1,17 @@
 {
   "$schema": "../schema.json",
   "enabled": true,
-  "profile_name": "auto switch",
+  "profileName": "auto switch",
   "profileConfig": [
     {
       "name": "my clash",
       "type": "proxy_server",
-      "server": "socks5://127.0.0.1:7890"
+      "server": "socks5://127.0.0.1:7890",
     },
     {
       "name": "whistle",
       "type": "proxy_server",
-      "server": "http://127.0.0.1:8899"
+      "server": "http://127.0.0.1:8899",
     },
     {
       "name": "auto switch",
@@ -19,65 +19,45 @@
       "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
       "switchRules": [
         {
-          "note": "局域网直连",
-          "conditions": [
-            {
-              "conditionType": "HostWildcardCondition",
-              "pattern": "*.local"
-            }
-          ],
-          "profileName": "direct"
-        },
-        {
           "note": "AI API 直连",
           "conditions": [
             {
-              "conditionType": "HostWildcardCondition",
-              "pattern": "api.openai.com"
-            }
+              "type": "host",
+              "pattern": "https://ccproxy.yukework.com",
+            },
           ],
-          "profileName": "direct"
+          "profileName": "direct",
         },
         {
           "conditions": [
             {
-              "conditionType": "HostWildcardCondition",
-              "pattern": "api.anthropic.com"
-            }
+              "type": "host",
+              "pattern": "api.anthropic.com",
+            },
           ],
-          "profileName": "direct"
+          "profileName": "direct",
         },
         {
           "note": "Google 走 Clash",
           "conditions": [
             {
-              "conditionType": "UrlWildcardCondition",
-              "pattern": "*://*.google.com/*"
-            }
+              "type": "url",
+              "pattern": "*://*.google.com/*",
+            },
           ],
-          "profileName": "my clash"
+          "profileName": "my clash",
         },
         {
           "note": "GitHub 走 Clash",
           "conditions": [
             {
-              "conditionType": "HostWildcardCondition",
-              "pattern": "*.github.com"
-            }
+              "type": "host",
+              "pattern": "*.github.com",
+            },
           ],
-          "profileName": "my clash"
+          "profileName": "my clash",
         },
-        {
-          "note": "默认走 Clash",
-          "conditions": [
-            {
-              "conditionType": "HostWildcardCondition",
-              "pattern": "*"
-            }
-          ],
-          "profileName": "my clash"
-        }
-      ]
-    }
-  ]
+      ],
+    },
+  ],
 }

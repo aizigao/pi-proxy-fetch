@@ -18,17 +18,17 @@ export function routeRequest(
   }
 
   const activeProfile = config.profileConfig.find(
-    (p) => p.name === config.profile_name,
+    (p) => p.name === config.profileName,
   );
 
   // Direct reservation
-  if (config.profile_name === "direct") {
+  if (config.profileName === "direct") {
     stats.direct += 1;
     return { action: "direct" };
   }
 
   // System proxy
-  if (config.profile_name === "system") {
+  if (config.profileName === "system") {
     const server = resolveProxyServer(config, "system");
     if (server) {
       stats.proxy += 1;

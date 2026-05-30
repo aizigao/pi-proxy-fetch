@@ -83,19 +83,6 @@ pi install npm:@aizigao/pi-proxy-fetch
 2. `~/.pi/proxy.json`（标准 JSON）
 3. 旧 `~/.pi/agent/proxy.json` → 首次运行时自动迁移到 `proxy.jsonc`
 
-### Schema
-
-添加 `"$schema"` 可在 VS Code 中获得自动补全和校验：
-
-```jsonc
-{
-  "$schema": "https://raw.githubusercontent.com/aizigao/pi-proxy-fetch/master/schema.json",
-  // ...
-}
-```
-
-本地生成：`npm run schema` → `schema.json`。
-
 ### 顶层字段
 
 | 字段 | 类型 | 说明 |
@@ -141,38 +128,7 @@ pi install npm:@aizigao/pi-proxy-fetch
 /proxy stats           # 显示请求统计
 /proxy rules           # 显示 autoSwitch 规则
 /proxy reload          # 重新加载配置
-```
-
-## 开发
-
-```bash
-npm install
-npm run check          # TypeScript
-npm run lint           # ESLint
-npm run lint:fix       # ESLint 自动修复
-npm run schema         # 生成 JSON Schema
-```
-
-## 项目结构
-
-```text
-.
-├── index.ts              # Pi 扩展入口
-├── lib/
-│   ├── config.ts         # 配置读取、JSONC 解析、旧格式迁移、schema 校验
-│   ├── conditions.ts     # 条件匹配引擎
-│   ├── router.ts         # Profile 解析和请求路由
-│   └── stats.ts          # 请求计数器
-├── scripts/
-│   └── generate-schema.js  # JSON Schema 生成器
-├── schema.json           # 生成的 JSON Schema
-├── spec/
-│   └── SPEC.md           # 规格文档
-├── package.json
-├── tsconfig.json
-├── eslint.config.js
-├── README.md
-└── README-CN.md
+/proxy refresh_ruleList_file     # 下载远程规则列表
 ```
 
 ## License

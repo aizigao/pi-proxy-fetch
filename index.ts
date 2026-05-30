@@ -5,6 +5,8 @@ import {
   reloadConfig,
   writeConfig,
   resolveProfile,
+  syncRuleList,
+  needsRuleListDownload,
 } from "./lib/config.js";
 import type { ProxyConfig } from "./lib/config.js";
 import { routeRequest } from "./lib/router.js";
@@ -58,7 +60,7 @@ export default function (pi: ExtensionAPI) {
       const url = new URL(getUrlString(input));
       const config = currentConfig;
 
-      if (!config || !isProxyableUrl(url)) {
+      if (!config || !config.enabled || !isProxyableUrl(url)) {
         return underlyingFetch(input, init);
       }
 
@@ -125,7 +127,8 @@ export default function (pi: ExtensionAPI) {
         argStr &&
         argStr !== "stats" &&
         argStr !== "rules" &&
-        argStr !== "reload"
+        argStr !== "reload" &&
+        argStr !== "refresh_ruleList_file"
       ) {
         const targetName = argStr;
 
@@ -142,7 +145,7 @@ export default function (pi: ExtensionAPI) {
           return;
         }
 
-        config.profile_name = targetName;
+        config.profileName = targetName;
         try {
           writeConfig(config);
           currentConfig = readConfig();
@@ -176,6 +179,22 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
+      // /proxy refresh_ruleList_file
+      if (argStr === "refresh_ruleList_file") {
+        ctx.ui.notify("Refreshing rule lists...", "info");
+        try {
+          await syncRuleList(config);
+          // syncRuleList merges into config in-place — no need to re-read
+          ctx.ui.notify("Rule lists refreshed.", "info");
+        } catch (err) {
+          ctx.ui.notify(
+            `Failed: ${err instanceof Error ? err.message : String(err)}`,
+            "error",
+          );
+        }
+        return;
+      }
+
       // /proxy rules
       if (argStr === "rules") {
         const profile = resolveProfile(config);
@@ -184,9 +203,9 @@ export default function (pi: ExtensionAPI) {
             .map((rule, i) => {
               const conds = (rule.conditions ?? [])
                 .map((c) =>
-                  c.conditionType === "DisabledCondition"
+                  c.type === "DisabledCondition"
                     ? "Disabled"
-                    : `${c.conditionType}: ${c.pattern ?? "*"}`,
+                    : `${c.type}: ${c.pattern ?? "*"}`,
                 )
                 .join(" AND ") || "(always)";
               const note = rule.note ? `  # ${rule.note}` : "";
@@ -199,7 +218,7 @@ export default function (pi: ExtensionAPI) {
           );
         } else {
           ctx.ui.notify(
-            `Current profile "${config.profile_name}" is not an autoSwitch profile.`,
+            `Current profile "${config.profileName}" is not an autoSwitch profile.`,
             "info",
           );
         }
@@ -207,7 +226,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       // /proxy — interactive menu
-      const currentName = config.profile_name;
+      const currentName = config.profileName;
 
       interface ProfileItem {
         name: string;
@@ -236,7 +255,7 @@ export default function (pi: ExtensionAPI) {
 
       for (const p of profileList) {
         if (choice.includes(` ${p.name} `)) {
-          config.profile_name = p.name;
+          config.profileName = p.name;
           try {
             writeConfig(config);
             currentConfig = readConfig();
@@ -263,9 +282,9 @@ export default function (pi: ExtensionAPI) {
             .map((rule, i) => {
               const conds = (rule.conditions ?? [])
                 .map((c) =>
-                  c.conditionType === "DisabledCondition"
+                  c.type === "DisabledCondition"
                     ? "Disabled"
-                    : `${c.conditionType}: ${c.pattern ?? "*"}`,
+                    : `${c.type}: ${c.pattern ?? "*"}`,
                 )
                 .join(" AND ") || "(always)";
               const note = rule.note ? `  # ${rule.note}` : "";
@@ -278,7 +297,7 @@ export default function (pi: ExtensionAPI) {
           );
         } else {
           ctx.ui.notify(
-            `Current profile "${config.profile_name}" is not an autoSwitch profile.`,
+            `Current profile "${config.profileName}" is not an autoSwitch profile.`,
             "info",
           );
         }
@@ -298,8 +317,16 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ---- Events ----
-  pi.on("session_start", () => {
+  pi.on("session_start", async () => {
     currentConfig = readConfig();
+    if (currentConfig && needsRuleListDownload(currentConfig)) {
+      try {
+        await syncRuleList(currentConfig);
+        currentConfig = readConfig();
+      } catch (err) {
+        console.error("[proxy] syncRuleList error:", err);
+      }
+    }
   });
 
   pi.on("session_shutdown", () => {

@@ -134,7 +134,7 @@ function matchCondition(
   url: string,
   hostname: string,
 ): boolean {
-  switch (condition.conditionType) {
+  switch (condition.type) {
     case "HostWildcardCondition":
       return matchesHostWildcard(hostname, condition.pattern ?? "*");
 
