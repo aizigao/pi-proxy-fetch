@@ -127,8 +127,7 @@ export default function (pi: ExtensionAPI) {
         argStr &&
         argStr !== "stats" &&
         argStr !== "rules" &&
-        argStr !== "reload" &&
-        argStr !== "refresh_ruleList_file"
+        argStr !== "reload"
       ) {
         const targetName = argStr;
 
@@ -179,22 +178,6 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      // /proxy refresh_ruleList_file
-      if (argStr === "refresh_ruleList_file") {
-        ctx.ui.notify("Refreshing rule lists...", "info");
-        try {
-          await syncRuleList(config);
-          // syncRuleList merges into config in-place — no need to re-read
-          ctx.ui.notify("Rule lists refreshed.", "info");
-        } catch (err) {
-          ctx.ui.notify(
-            `Failed: ${err instanceof Error ? err.message : String(err)}`,
-            "error",
-          );
-        }
-        return;
-      }
-
       // /proxy rules
       if (argStr === "rules") {
         const profile = resolveProfile(config);
@@ -233,8 +216,8 @@ export default function (pi: ExtensionAPI) {
         note: string;
       }
       const profileList: ProfileItem[] = [
-        { name: "direct", note: "直连（内置）" },
-        { name: "system", note: "系统代理（内置）" },
+        { name: "direct", note: "direct" },
+        { name: "system", note: "env http_proxy" },
         ...config.profileConfig.map((p) => ({
           name: p.name,
           note: p.type === "autoSwitch" ? "auto switch" : p.server ?? "",
@@ -248,7 +231,13 @@ export default function (pi: ExtensionAPI) {
 
       const choice = await ctx.ui.select(
         `proxy [${currentName}]`,
-        [...choices, "Show stats", "Show rules", "Reload config"],
+        [
+          ...choices,
+          "Show stats",
+          "Show rules",
+          "Refresh rule list files",
+          "Reload config",
+        ],
       );
 
       if (!choice) return;
@@ -299,6 +288,20 @@ export default function (pi: ExtensionAPI) {
           ctx.ui.notify(
             `Current profile "${config.profileName}" is not an autoSwitch profile.`,
             "info",
+          );
+        }
+        return;
+      }
+
+      if (choice === "Refresh rule list files") {
+        ctx.ui.notify("Refreshing rule lists...", "info");
+        try {
+          await syncRuleList(config);
+          ctx.ui.notify("Rule lists refreshed.", "info");
+        } catch (err) {
+          ctx.ui.notify(
+            `Failed: ${err instanceof Error ? err.message : String(err)}`,
+            "error",
           );
         }
         return;
