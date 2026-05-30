@@ -8,7 +8,6 @@ Forked from [`haokanjiang/pi-proxy`](https://github.com/haokanjiang/pi-proxy) an
 
 This package keeps the current local routing model intact:
 - config file lives at `~/.pi/agent/proxy.json`
-- rules are re-read on every request
 - wildcard hostname matching is supported
 - proxy requests use `undici` with `ProxyAgent`
 - fallback mode retries failed direct requests through the proxy
@@ -19,9 +18,8 @@ This package keeps the current local routing model intact:
 `@aizigao/pi-proxy-fetch` monkey-patches `globalThis.fetch` inside a Pi session.
 
 For each request it:
-1. reads `~/.pi/agent/proxy.json`
-2. matches the request hostname against your rules
-3. chooses one of three actions:
+1. matches the request hostname against your rules
+2. chooses one of three actions:
    - `direct`: use the original fetch
    - `proxy`: send via `ProxyAgent`
    - `fallback`: try direct first, then retry through proxy on network failure
@@ -196,7 +194,7 @@ npm run lint
 This package intentionally preserves the existing local behavior instead of fully copying upstream `pi-proxy`:
 
 - config path stays `~/.pi/agent/proxy.json`
-- config is re-read per request instead of cached in memory
+- config is cached in memory and refreshed on `session_start`
 - wildcard matching uses regex conversion
 - fallback retries a broader set of non-abort failures
 - proxy requests explicitly use `undici.fetch`

@@ -8,7 +8,6 @@ English: [`README.md`](./README.md)
 
 这个包保留了当前本地实现的核心路由模型：
 - 配置文件位于 `~/.pi/agent/proxy.json`
-- 每次请求都会重新读取规则
 - 支持通配符 hostname 匹配
 - 代理请求通过 `undici` 的 `ProxyAgent` 发出
 - `fallback` 模式会在直连失败后通过代理重试
@@ -19,9 +18,8 @@ English: [`README.md`](./README.md)
 `@aizigao/pi-proxy-fetch` 会在 Pi 会话内 monkey-patch `globalThis.fetch`。
 
 每次请求会执行以下流程：
-1. 读取 `~/.pi/agent/proxy.json`
-2. 根据请求 hostname 匹配规则
-3. 选择以下三种动作之一：
+1. 根据请求 hostname 匹配规则
+2. 选择以下三种动作之一：
    - `direct`：使用原始 fetch
    - `proxy`：通过 `ProxyAgent` 发起请求
    - `fallback`：先直连，若发生网络失败则通过代理重试
@@ -196,11 +194,10 @@ npm publish
 这个包有意保留当前本地实现的行为，而不是完全照搬上游 `pi-proxy`：
 
 - 配置路径保持为 `~/.pi/agent/proxy.json`
-- 配置按请求重新读取，而不是常驻内存缓存
+- 配置缓存在内存中，session_start 时自动刷新，不再每次请求读文件
 - 通配符匹配通过 regex 转换实现
 - `fallback` 会对更宽泛的非 abort 错误进行代理重试
 - 代理请求显式使用 `undici.fetch`
-
 
 ## License
 

@@ -39,6 +39,7 @@ const stats: ProxyStats = {
   fallbackHit: 0,
 };
 
+let currentConfig: ProxyConfig | null = null;
 let patched = false;
 let restoreFetch: (() => void) | null = null;
 
@@ -142,7 +143,7 @@ function formatRules(config: ProxyConfig | null): string {
 }
 
 export default function (pi: ExtensionAPI) {
-  let currentConfig = readProxyConfig();
+  currentConfig = readProxyConfig();
 
   if (!patched) {
     patched = true;
@@ -163,7 +164,7 @@ export default function (pi: ExtensionAPI) {
 
     const patchedFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const url = new URL(getUrlString(input));
-      const config = readProxyConfig();
+      const config = currentConfig;
 
       if (!config?.enabled || !config.proxy || !isProxyableUrl(url)) {
         return underlyingFetch(input, init);
@@ -284,6 +285,10 @@ export default function (pi: ExtensionAPI) {
 
       ctx.ui.notify(formatRules(currentConfig), "info");
     },
+  });
+
+  pi.on("session_start", () => {
+    currentConfig = readProxyConfig();
   });
 
   pi.on("session_shutdown", async () => {
