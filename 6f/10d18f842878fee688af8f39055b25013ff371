@@ -1,0 +1,9 @@
+.pi/proxy.json
+  ai_agent 7,9,15,23,27,31,34-36,38,41,43-45,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6f10d18f842878fee688af8f39055b25013ff371",
+  "prompts": {}
+}
