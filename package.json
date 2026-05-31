@@ -47,6 +47,7 @@
     "image": "./assets/readme-cover.png"
   },
   "dependencies": {
+    "@aizigao/pi-fetch-pipeline": "^1.0.0",
     "undici": "^7.16.0"
   },
   "peerDependencies": {

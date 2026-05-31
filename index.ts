@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { ProxyAgent, fetch as undiciFetch } from "undici";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerFetchMiddleware } from "@aizigao/pi-fetch-pipeline";
 import {
   readConfig,
   reloadConfig,
@@ -19,11 +20,6 @@ import { formatStats } from "./lib/stats.js";
 // =============================================================================
 
 let currentConfig: ProxyConfig | null = null;
-let patched = false;
-let restoreFetch: (() => void) | null = null;
-let underlyingFetch: typeof fetch | null = null;
-let originalFetchValue: typeof fetch | null = null;
-let originalFetchDescriptor: PropertyDescriptor | undefined;
 
 const agentCache = new Map<string, ProxyAgent>();
 const certCache = new Map<string, string>();
@@ -130,21 +126,15 @@ function setConfig(config: ProxyConfig | null): void {
 export default function (pi: ExtensionAPI) {
   setConfig(readConfig());
 
-  // ---- Fetch patch ----
-  if (!patched) {
-    patched = true;
-
-    originalFetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, "fetch");
-    originalFetchValue = globalThis.fetch;
-    underlyingFetch = globalThis.fetch;
-
-    const patchedFetch = async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+  registerFetchMiddleware({
+    name: "pi-proxy-fetch",
+    priority: 50,
+    middleware: async ({ input, init, next }) => {
       const url = new URL(getUrlString(input));
       const config = currentConfig;
-      const rawFetch = underlyingFetch ?? globalThis.fetch;
 
       if (!config || !config.enabled || !isProxyableUrl(url)) {
-        return rawFetch(input, init);
+        return next(input, init);
       }
 
       const result = routeRequest(
@@ -154,7 +144,7 @@ export default function (pi: ExtensionAPI) {
       );
 
       if (result.action === "direct") {
-        return rawFetch(input, init);
+        return next(input, init);
       }
 
       const profile = findProxyProfile(config, result.profileName);
@@ -162,47 +152,9 @@ export default function (pi: ExtensionAPI) {
       return undiciFetch(
         input as Parameters<typeof undiciFetch>[0],
         { ...init, dispatcher } as Parameters<typeof undiciFetch>[1],
-      );
-    };
-
-    Object.defineProperty(globalThis, "fetch", {
-      configurable: true,
-      enumerable: originalFetchDescriptor?.enumerable ?? true,
-      get() {
-        return patchedFetch;
-      },
-      set(newFetch: typeof fetch) {
-        if (newFetch === patchedFetch) return;
-        underlyingFetch = newFetch;
-      },
-    });
-
-    restoreFetch = () => {
-      closeCachedAgents();
-      if (globalThis.fetch !== patchedFetch) {
-        patched = false;
-        restoreFetch = null;
-        return;
-      }
-
-      if (underlyingFetch && underlyingFetch !== originalFetchValue) {
-        Object.defineProperty(globalThis, "fetch", {
-          configurable: true,
-          enumerable: true,
-          writable: true,
-          value: underlyingFetch,
-        });
-      } else if (originalFetchDescriptor) {
-        Object.defineProperty(globalThis, "fetch", originalFetchDescriptor);
-      }
-
-      patched = false;
-      restoreFetch = null;
-      underlyingFetch = null;
-      originalFetchValue = null;
-      originalFetchDescriptor = undefined;
-    };
-  }
+      ) as unknown as Promise<Response>;
+    },
+  });
 
   // ---- Register commands ----
   pi.registerCommand("proxy", {
@@ -388,6 +340,6 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", () => {
-    restoreFetch?.();
+    closeCachedAgents();
   });
 }
