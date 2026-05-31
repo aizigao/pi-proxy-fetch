@@ -1,169 +1,203 @@
 # @aizigao/pi-proxy-fetch
 
-中文文档：[`README-CN.md`](./README-CN.md)
+[![npm version](https://img.shields.io/npm/v/%40aizigao%2Fpi-proxy-fetch)](https://www.npmjs.com/package/@aizigao/pi-proxy-fetch)
 
-A Pi extension package that routes `globalThis.fetch` through direct, proxy, or direct-with-proxy-fallback behavior based on hostname rules.
+Chinese: [`README-CN.md`](./README-CN.md)
 
-Forked from [`haokanjiang/pi-proxy`](https://github.com/haokanjiang/pi-proxy) and adapted to preserve this package's current local routing behavior and packaging structure.
-
-This package keeps the current local routing model intact:
-- config file lives at `~/.pi/agent/proxy.json`
-- rules are re-read on every request
-- wildcard hostname matching is supported
-- proxy requests use `undici` with `ProxyAgent`
-- fallback mode retries failed direct requests through the proxy
-- `/proxy` command provides ON/OFF, stats, reload, and rule display
-
-## What it does
-
-`@aizigao/pi-proxy-fetch` monkey-patches `globalThis.fetch` inside a Pi session.
-
-For each request it:
-1. reads `~/.pi/agent/proxy.json`
-2. matches the request hostname against your rules
-3. chooses one of three actions:
-   - `direct`: use the original fetch
-   - `proxy`: send via `ProxyAgent`
-   - `fallback`: try direct first, then retry through proxy on network failure
-
-This is intentionally a network-layer fetch router. It is not a search tool and it does not change non-fetch HTTP clients.
+A Pi extension package that patches `globalThis.fetch` inside a Pi session and routes requests through SwitchyOmega-style `switchRules` and proxy profiles.
 
 ## Features
 
-- Pi extension package layout
-- Rule-based host matching
-- `direct`, `proxy`, `fallback` actions
-- per-session fetch patching with shutdown restore
-- `/proxy` interactive command
-- request counters for direct, proxy, and fallback traffic
-- config-driven enable/disable switch persisted to disk
+- **Multiple profiles**: define multiple proxy servers such as Clash or Whistle
+- **autoSwitch**: match requests by rules and route them to a target profile
+- **Built-in targets**: `direct` and `system` (`HTTP_PROXY` / `HTTPS_PROXY`)
+- **Remote rule lists**: `ruleListURL` downloads a local cached rule file and participates in matching
+- **Custom CA cert**: `proxy_server` supports optional `caCertPath` for tools like Whistle
+- **Interactive menu**: switch profiles, toggle enable/disable, inspect stats, inspect rules, refresh rule lists, reload config
 
 ## Requirements
 
 - Node.js 20+
 - Pi coding agent installed
-- A Pi agent config directory at `~/.pi/agent`
-
-## Repository
-
-- GitHub: https://github.com/aizigao/pi-proxy-fetch
-- Issues: https://github.com/aizigao/pi-proxy-fetch/issues
-- npm package: `@aizigao/pi-proxy-fetch`
 
 ## Installation
-
-### Install with Pi
 
 ```bash
 pi install npm:@aizigao/pi-proxy-fetch
 ```
 
-## Publishing
+## npm package
 
-Before publishing, verify:
-
-```bash
-npm run check
-npm run lint
-```
-
-Then publish:
-
-```bash
-npm publish
-```
-
-This package is configured as a public scoped package.
+- Package: `@aizigao/pi-proxy-fetch`
+- npm: https://www.npmjs.com/package/@aizigao/pi-proxy-fetch
 
 ## Configuration
 
-Create `~/.pi/agent/proxy.json`:
+Recommended project-local config: `./.pi/proxy.json`
+
+Global config is also supported: `~/.pi/agent/proxy.json`
 
 ```json
 {
+  "$schema": "https://raw.githubusercontent.com/aizigao/pi-proxy-fetch/master/schema.json",
+  "version": 1,
   "enabled": true,
-  "proxy": "http://127.0.0.1:7890",
-  "mode": "direct",
-  "rules": [
+  "profileName": "auto switch",
+  "profileConfig": [
     {
-      "match": "api.openai.com,api.anthropic.com",
-      "action": "direct",
-      "comment": "keep AI API traffic direct"
+      "name": "my clash",
+      "type": "proxy_server",
+      "server": "socks5://127.0.0.1:7890"
     },
     {
-      "match": "*.google.com,*.github.com",
-      "action": "proxy",
-      "comment": "always proxy selected domains"
+      "name": "whistle",
+      "type": "proxy_server",
+      "server": "http://127.0.0.1:8899",
+      "caCertPath": "~/.WhistleAppData/.whistle/certs/root.crt"
     },
     {
-      "match": "*",
-      "action": "fallback",
-      "comment": "default: direct first, proxy on network failure"
+      "name": "auto switch",
+      "type": "autoSwitch",
+      "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
+      "switchRules": [
+        {
+          "note": "OpenAI direct",
+          "conditions": [
+            { "type": "host", "pattern": "api.openai.com" }
+          ],
+          "profileName": "direct"
+        },
+        {
+          "note": "Anthropic direct",
+          "conditions": [
+            { "type": "host", "pattern": "api.anthropic.com" }
+          ],
+          "profileName": "direct"
+        },
+        {
+          "note": "GitHub via Clash",
+          "conditions": [
+            { "type": "host", "pattern": "*.github.com" }
+          ],
+          "profileName": "my clash"
+        },
+        {
+          "note": "Google via Clash",
+          "conditions": [
+            { "type": "url", "pattern": "*://*.google.com/*" }
+          ],
+          "profileName": "my clash"
+        }
+      ]
     }
   ]
 }
 ```
 
-### Config fields
+## Config path priority
+
+1. `./.pi/proxy.json` (project-local, preferred)
+2. `~/.pi/agent/proxy.json` (global)
+
+> Only configs with `version: 1` are treated as the current format. If the file is not the current format, the current file is backed up as `proxy.bak.json` and a default config is generated.
+
+## Top-level fields
 
 | Field | Type | Description |
-| --- | --- | --- |
-| `enabled` | `boolean` | Global ON/OFF switch. `/proxy` can toggle and persist it. |
-| `proxy` | `string` | Proxy URL passed to `undici` `ProxyAgent`. |
-| `mode` | `direct \| proxy \| fallback` | Default action when no rule matches. |
-| `rules` | `ProxyRule[]` | Top-down rule list. First match wins. |
+|---|---|---|
+| `version` | `1` | Current config schema version |
+| `enabled` | `boolean` | Master on/off switch. `false` bypasses all proxy logic |
+| `profileName` | `string` | Active profile name. Reserved values: `direct`, `system` |
+| `profileConfig` | `Profile[]` | Profile list |
 
-### Rule format
+## `proxy_server` fields
 
-```json
-{
-  "match": "*.example.com,api.example.com",
-  "action": "proxy",
-  "comment": "optional note"
-}
-```
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Profile name |
+| `type` | `"proxy_server"` | Fixed value |
+| `server` | `string` | Proxy URL, e.g. `socks5://127.0.0.1:7890` |
+| `caCertPath` | `string?` | Optional CA certificate path, useful for Whistle-style self-signed proxies |
 
-- `match` supports comma-separated patterns
-- `*` matches everything
-- patterns without `*` require exact hostname match
-- patterns with `*` are treated as wildcards
+## `autoSwitch` fields
 
-Examples:
-- `api.openai.com`
-- `*.google.com`
-- `github.*`
-- `*`
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Profile name |
+| `type` | `"autoSwitch"` | Fixed value |
+| `ruleListURL` | `string?` | Remote rule list URL |
+| `switchRules` | `SwitchRule[]` | Local rules |
 
-## Command
+## `SwitchRule` fields
 
-Inside Pi, run:
+| Field | Type | Description |
+|---|---|---|
+| `note` | `string?` | Note |
+| `conditions` | `Condition[]?` | Condition list with **AND** logic; empty means always match |
+| `profileName` | `string` | Target profile. Reserved: `direct`, `system` |
+
+## `Condition` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `host` / `url` / `regex` / `disabled` | Condition type |
+| `pattern` | `string?` | Match pattern |
+
+## Condition types
+
+| `type` | Matches | Notes |
+|---|---|---|
+| `host` | request hostname | Supports `*` / `?`; `*.example.com` matches both `example.com` and subdomains; `**.example.com` matches subdomains only |
+| `url` | full request URL | Supports `*` / `?`; no special `*.` behavior |
+| `regex` | full request URL | JavaScript regular expression |
+| `disabled` | - | Never matches |
+
+> If no rule matches, the request goes direct by default. No explicit catch-all rule is required.
+
+## `ruleListURL` behavior
+
+- `ruleListURL` is useful when you want to reuse a remote ruleset such as gfwlist / AutoProxy
+- The downloaded content is saved next to the config file
+- Filename format:
 
 ```text
-/proxy
+proxy-rulelist-file--{profile_name_safe}.txt
 ```
 
-Menu actions:
-- `Turn ON` / `Turn OFF`
-- `Show stats`
-- `Reload config`
-- `Show rules`
+Example:
 
-## Behavior notes
+```text
+./.pi/proxy-rulelist-file--auto_switch.txt
+```
 
-### Direct vs proxy vs fallback
+Behavior:
 
-- `direct`: uses the original unpatched fetch
-- `proxy`: uses `undiciFetch(..., { dispatcher: new ProxyAgent(...) })`
-- `fallback`: tries direct first, then retries through proxy unless the failure is an abort/timeout-style error
+- On `session_start`, if the local file already exists, it is loaded directly
+- If the local file is missing, it is downloaded once automatically
+- You can also refresh it manually from the `/proxy` menu via **Refresh rule list files**
+- Downloaded remote rules are merged into memory at runtime only and are not written back into your original `switchRules`
+- Profile switching, reload, and menu actions never directly rewrite your original rules
 
-### What this package does not intercept
+## Commands
 
-The patch only affects code that calls the patched `globalThis.fetch` after the extension has loaded.
+Run inside Pi:
 
-It does **not** automatically intercept:
-- code that cached the old `fetch` before patching
-- code that imports `undici.fetch` directly
-- other HTTP clients
+```text
+/proxy            # open interactive menu
+/proxy stats      # show stats
+/proxy rules      # show current autoSwitch rules
+/proxy reload     # reload config
+/proxy "name"     # switch directly to a profile
+```
+
+The `/proxy` menu includes:
+
+- Select profile
+- Enable/Disable proxy
+- Show stats
+- Show rules
+- Refresh rule list files
+- Reload config
 
 ## Development
 
@@ -171,35 +205,8 @@ It does **not** automatically intercept:
 npm install
 npm run check
 npm run lint
+npm run schema
 ```
-
-## Scripts
-
-| Command | Description |
-| --- | --- |
-| `npm run check` | Run TypeScript type checking |
-| `npm run lint` | Run ESLint |
-| `npm run lint:fix` | Run ESLint with auto-fixes |
-
-## Project structure
-
-```text
-.
-├── index.ts         # Pi extension entrypoint
-├── eslint.config.js # ESLint flat config
-├── tsconfig.json    # TypeScript config
-└── package.json     # npm + Pi package metadata
-```
-
-## Design choices
-
-This package intentionally preserves the existing local behavior instead of fully copying upstream `pi-proxy`:
-
-- config path stays `~/.pi/agent/proxy.json`
-- config is re-read per request instead of cached in memory
-- wildcard matching uses regex conversion
-- fallback retries a broader set of non-abort failures
-- proxy requests explicitly use `undici.fetch`
 
 ## License
 
