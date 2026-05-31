@@ -1,3 +1,5 @@
+index.ts
+  ai_agent 130,219-220,234-240,296-304
 ---
 {
   "schema_version": "authorship/3.0.0",
