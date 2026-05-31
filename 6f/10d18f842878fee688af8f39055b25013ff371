@@ -1,5 +1,5 @@
 .pi/proxy.json
-  ai_agent 7,9,15,23,27,31,34-36,38,41,43-45,47
+  ai_agent 7,43-45,47
 ---
 {
   "schema_version": "authorship/3.0.0",
