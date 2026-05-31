@@ -1,6 +1,6 @@
 {
   "name": "@aizigao/pi-proxy-fetch",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Pi extension package that routes globalThis.fetch through direct, proxy, or fallback behavior based on hostname rules.",
   "type": "module",
   "license": "MIT",
@@ -37,8 +37,7 @@
     "check": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "schema": "node scripts/generate-schema.js",
-    "postinstall": "node scripts/setup-hooks.js"
+    "schema": "node scripts/generate-schema.js"
   },
   "pi": {
     "extensions": [
