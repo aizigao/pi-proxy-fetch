@@ -3,7 +3,6 @@ import { get } from "node:https";
 import type { IncomingMessage } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import * as jsonc from "jsonc-parser";
 
 // =============================================================================
 // Types
@@ -12,21 +11,15 @@ import * as jsonc from "jsonc-parser";
 export type ProfileType = "proxy_server" | "autoSwitch";
 
 export type ConditionType =
-  | "HostWildcardCondition"
-  | "UrlWildcardCondition"
-  | "UrlRegexCondition"
-  | "DisabledCondition";
-
-// Short aliases used in proxy.jsonc
-const CONDITION_MAP: Record<string, ConditionType> = {
-  host: "HostWildcardCondition",
-  url: "UrlWildcardCondition",
-  regex: "UrlRegexCondition",
-  disabled: "DisabledCondition",
-};
+  | "host"
+  | "url"
+  | "regex"
+  | "disabled";
 
 function normalizeConditionType(type: string): ConditionType | null {
-  return CONDITION_MAP[type] ?? null;
+  return type === "host" || type === "url" || type === "regex" || type === "disabled"
+    ? type
+    : null;
 }
 
 export interface SwitchCondition {
@@ -44,6 +37,7 @@ export interface Profile {
   name: string;
   type: ProfileType;
   server?: string;
+  caCertPath?: string;
   ruleListURL?: string;
   switchRules?: SwitchRule[];
 }
@@ -81,36 +75,24 @@ function getAgentDir(): string {
   );
 }
 
-function getProjectConfigPaths(): { jsonc: string; json: string } | null {
+function getProjectConfigPath(): string | null {
   try {
-    const projectDir = join(process.cwd(), ".pi");
-    return {
-      jsonc: join(projectDir, "proxy.jsonc"),
-      json: join(projectDir, "proxy.json"),
-    };
+    return join(process.cwd(), ".pi", "proxy.json");
   } catch {
     return null;
   }
 }
 
-function getGlobalConfigPaths(): { jsonc: string; json: string } {
-  const homeDir = join(homedir(), ".pi");
-  return {
-    jsonc: join(homeDir, "proxy.jsonc"),
-    json: join(homeDir, "proxy.json"),
-  };
+function getGlobalConfigPath(): string {
+  return join(homedir(), ".pi", "proxy.json");
 }
 
 function getLegacyConfigPath(): string {
   return join(getAgentDir(), "proxy.json");
 }
 
-// =============================================================================
-// JSONC parsing
-// =============================================================================
-
 function processContent(raw: string): unknown {
-  return jsonc.parse(raw);
+  return JSON.parse(raw);
 }
 
 // =============================================================================
@@ -131,7 +113,6 @@ function migrateLegacyAction(action: LegacyAction | undefined): string {
 
 function migrateLegacyConfig(legacy: LegacyConfig): ProxyConfig {
   const proxyServerName = "default proxy";
-
   const profileConfig: Profile[] = [];
 
   if (legacy.proxy) {
@@ -151,9 +132,7 @@ function migrateLegacyConfig(legacy: LegacyConfig): ProxyConfig {
     return {
       note: rule.comment,
       conditions: patterns.map((pattern) => ({
-        type: (pattern.includes("*://") || pattern.includes("http"))
-          ? ("url" as ConditionType)
-          : ("host" as ConditionType),
+        type: pattern.includes("*://") || pattern.includes("http") ? "url" : "host",
         pattern,
       })),
       profileName: migrateLegacyAction(rule.action),
@@ -190,7 +169,7 @@ function migrateLegacyConfig(legacy: LegacyConfig): ProxyConfig {
 
   return {
     enabled: legacy.enabled ?? true,
-    profileName: profileName,
+    profileName,
     profileConfig,
   };
 }
@@ -221,26 +200,40 @@ function validateProfile(profile: unknown, index: number): string | null {
     return `profileConfig[${index}] "${p.name}": "server" must be a string`;
   }
 
+  if (
+    p.type === "proxy_server" &&
+    p.caCertPath !== undefined &&
+    typeof p.caCertPath !== "string"
+  ) {
+    return `profileConfig[${index}] "${p.name}": "caCertPath" must be a string`;
+  }
+
   if (p.type === "autoSwitch") {
     if (p.switchRules !== undefined) {
       if (!Array.isArray(p.switchRules)) {
         return `profileConfig[${index}] "${p.name}": "switchRules" must be an array`;
       }
       for (let j = 0; j < (p.switchRules as unknown[]).length; j++) {
-        const rule = (p.switchRules as unknown[])[j] as
-          | Record<string, unknown>
-          | undefined;
+        const rule = (p.switchRules as unknown[])[j] as Record<string, unknown> | undefined;
         if (!rule || typeof rule !== "object") {
           return `profileConfig[${index}] "${p.name}" switchRules[${j}]: must be an object`;
         }
         if (typeof rule.profileName !== "string" || !rule.profileName.trim()) {
           return `profileConfig[${index}] "${p.name}" switchRules[${j}]: missing or invalid "profileName"`;
         }
-        if (
-          rule.conditions !== undefined &&
-          !Array.isArray(rule.conditions)
-        ) {
+        if (rule.conditions !== undefined && !Array.isArray(rule.conditions)) {
           return `profileConfig[${index}] "${p.name}" switchRules[${j}]: "conditions" must be an array`;
+        }
+        if (Array.isArray(rule.conditions)) {
+          for (let k = 0; k < rule.conditions.length; k++) {
+            const cond = rule.conditions[k] as Record<string, unknown>;
+            if (!cond || typeof cond !== "object") {
+              return `profileConfig[${index}] "${p.name}" switchRules[${j}] conditions[${k}]: must be an object`;
+            }
+            if (typeof cond.type !== "string" || !normalizeConditionType(cond.type)) {
+              return `profileConfig[${index}] "${p.name}" switchRules[${j}] conditions[${k}]: invalid "type"`;
+            }
+          }
         }
       }
     }
@@ -271,8 +264,7 @@ function validateConfig(raw: unknown): ProxyConfig | string {
   const profileName = obj.profileName.trim();
   if (profileName !== "direct" && profileName !== "system") {
     const found = (obj.profileConfig as unknown[]).find(
-      (p) =>
-        p && typeof p === "object" && (p as Record<string, unknown>).name === profileName,
+      (p) => p && typeof p === "object" && (p as Record<string, unknown>).name === profileName,
     );
     if (!found) {
       return `profileName "${profileName}" not found in profileConfig (or not a reserved name: "direct", "system")`;
@@ -284,31 +276,6 @@ function validateConfig(raw: unknown): ProxyConfig | string {
     if (error) return error;
   }
 
-  for (let i = 0; i < (obj.profileConfig as unknown[]).length; i++) {
-    const p = (obj.profileConfig as unknown[])[i] as Record<string, unknown>;
-    if (p.type !== "autoSwitch" || !Array.isArray(p.switchRules)) continue;
-
-    for (let j = 0; j < (p.switchRules as unknown[]).length; j++) {
-      const rule = (p.switchRules as unknown[])[j] as Record<string, unknown>;
-      const targetName = (rule.profileName as string)?.trim();
-      if (!targetName) continue;
-      if (targetName === "direct" || targetName === "system") continue;
-
-      const found = (obj.profileConfig as unknown[]).find(
-        (pp) =>
-          pp &&
-          typeof pp === "object" &&
-          (pp as Record<string, unknown>).name === targetName,
-      );
-      if (!found) {
-        return (
-          `profileConfig[${i}] "${p.name}" switchRules[${j}]: ` +
-          `profileName "${targetName}" not found in profileConfig`
-        );
-      }
-    }
-  }
-
   return obj as unknown as ProxyConfig;
 }
 
@@ -318,21 +285,41 @@ function validateConfig(raw: unknown): ProxyConfig | string {
 
 let _cached: ProxyConfig | null = null;
 
-function tryLoadFile(
-  filePath: string,
-  label: string,
-): ProxyConfig | null {
+function normalizeConfig(config: ProxyConfig): ProxyConfig {
+  return {
+    ...config,
+    profileConfig: config.profileConfig.map((profile) => {
+      if (profile.type !== "autoSwitch" || !profile.switchRules) {
+        return { ...profile };
+      }
+
+      return {
+        ...profile,
+        switchRules: profile.switchRules.map((rule) => ({
+          ...rule,
+          conditions: rule.conditions?.map((condition) => ({
+            ...condition,
+            type: normalizeConditionType(condition.type) ?? condition.type,
+          })),
+        })),
+      };
+    }),
+  };
+}
+
+function tryLoadFile(filePath: string, label: string): ProxyConfig | null {
   if (!existsSync(filePath)) return null;
 
   try {
     const raw = readFileSync(filePath, "utf8");
-    const result = validateConfig(processContent(raw));
+    const parsed = processContent(raw);
+    const result = validateConfig(parsed);
     if (typeof result === "string") {
       console.error(`[proxy] Invalid ${label}: ${result}`);
       return null;
     }
-    _cached = result;
-    return result;
+    _cached = normalizeConfig(result);
+    return _cached;
   } catch (err) {
     console.error(`[proxy] Failed to parse ${label}:`, err);
     return null;
@@ -340,55 +327,26 @@ function tryLoadFile(
 }
 
 export function readConfig(): ProxyConfig | null {
-  const projectPaths = getProjectConfigPaths();
+  const projectPath = getProjectConfigPath();
 
-  // 1. Project-local proxy.jsonc
-  if (projectPaths) {
-    const fromProject = tryLoadFile(
-      projectPaths.jsonc,
-      ".pi/proxy.jsonc",
-    );
+  // 1. Project-local proxy.json
+  if (projectPath) {
+    const fromProject = tryLoadFile(projectPath, ".pi/proxy.json");
     if (fromProject) {
       loadRuleListsForConfig(fromProject, join(process.cwd(), ".pi"));
       return fromProject;
     }
   }
 
-  // 2. Project-local proxy.json
-  if (projectPaths) {
-    const fromProject = tryLoadFile(
-      projectPaths.json,
-      ".pi/proxy.json",
-    );
-    if (fromProject) {
-      loadRuleListsForConfig(fromProject, join(process.cwd(), ".pi"));
-      return fromProject;
-    }
-  }
-
-  const globalPaths = getGlobalConfigPaths();
-
-  // 3. Global proxy.jsonc
-  const fromGlobal = tryLoadFile(
-    globalPaths.jsonc,
-    "~/.pi/proxy.jsonc",
-  );
+  // 2. Global proxy.json
+  const globalPath = getGlobalConfigPath();
+  const fromGlobal = tryLoadFile(globalPath, "~/.pi/proxy.json");
   if (fromGlobal) {
     loadRuleListsForConfig(fromGlobal, join(homedir(), ".pi"));
     return fromGlobal;
   }
 
-  // 4. Global proxy.json
-  const fromGlobalJson = tryLoadFile(
-    globalPaths.json,
-    "~/.pi/proxy.json",
-  );
-  if (fromGlobalJson) {
-    loadRuleListsForConfig(fromGlobalJson, join(homedir(), ".pi"));
-    return fromGlobalJson;
-  }
-
-  // 5. Legacy migration
+  // 3. Legacy migration
   const legacyPath = getLegacyConfigPath();
   if (existsSync(legacyPath)) {
     try {
@@ -396,14 +354,12 @@ export function readConfig(): ProxyConfig | null {
       const legacy = JSON.parse(raw) as LegacyConfig;
       const migrated = migrateLegacyConfig(legacy);
 
-      const outPath = getGlobalConfigPaths().jsonc;
+      const outPath = getGlobalConfigPath();
       writeFileSync(outPath, JSON.stringify(migrated, null, 2) + "\n", "utf8");
-      console.error(
-        `[proxy] Migrated ~/.pi/agent/proxy.json → ~/.pi/proxy.jsonc`,
-      );
+      console.error(`[proxy] Migrated ~/.pi/agent/proxy.json → ~/.pi/proxy.json`);
 
-      _cached = migrated;
-      return migrated;
+      _cached = normalizeConfig(migrated);
+      return _cached;
     } catch (err) {
       console.error("[proxy] Failed to migrate legacy config:", err);
       return _cached;
@@ -413,10 +369,7 @@ export function readConfig(): ProxyConfig | null {
   return _cached;
 }
 
-function loadRuleListsForConfig(
-  config: ProxyConfig,
-  configDir: string,
-): void {
+function loadRuleListsForConfig(config: ProxyConfig, configDir: string): void {
   let defaultProfile = "my clash";
   const proxyProfile = config.profileConfig.find(
     (p) => p.type === "proxy_server" && p.server,
@@ -436,19 +389,13 @@ export function reloadConfig(): ProxyConfig | null {
 }
 
 export function writeConfig(config: ProxyConfig): void {
-  // Write to project-local if it exists, otherwise global
-  const projectPaths = getProjectConfigPaths();
-  let outPath: string;
+  const projectPath = getProjectConfigPath();
+  const outPath = projectPath && existsSync(projectPath)
+    ? projectPath
+    : getGlobalConfigPath();
 
-  if (projectPaths && existsSync(projectPaths.jsonc)) {
-    outPath = projectPaths.jsonc;
-  } else if (projectPaths && existsSync(projectPaths.json)) {
-    outPath = projectPaths.jsonc; // migrate to jsonc
-  } else {
-    outPath = getGlobalConfigPaths().jsonc;
-  }
-
-  writeFileSync(outPath, JSON.stringify(config, null, 2) + "\n", "utf8");
+  const persistedConfig = stripRuntimeRuleLists(config);
+  writeFileSync(outPath, JSON.stringify(persistedConfig, null, 2) + "\n", "utf8");
 }
 
 export function resolveProfile(config: ProxyConfig): Profile | undefined {
@@ -488,10 +435,7 @@ function getRuleListPath(configDir: string, profileName: string): string {
   return join(configDir, `proxy-rulelist-file--${safeName}.txt`);
 }
 
-function parseRuleList(
-  text: string,
-  defaultProfileName: string,
-): SwitchRule[] {
+function parseRuleList(text: string, defaultProfileName: string): SwitchRule[] {
   const rules: SwitchRule[] = [];
   const lines = text.split(/\r?\n/);
 
@@ -503,7 +447,6 @@ function parseRuleList(
     let pattern = "";
     let profileName = defaultProfileName;
 
-    // Exception (whitelist)
     if (line.startsWith("@@")) {
       profileName = "direct";
       const rest = line.slice(2);
@@ -526,9 +469,7 @@ function parseRuleList(
         rawType = "url";
         pattern = `*${rest}*`;
       }
-    }
-    // Domain rule
-    else if (line.startsWith("||")) {
+    } else if (line.startsWith("||")) {
       const domain = line.slice(2);
       if (domain.includes("/")) {
         rawType = "url";
@@ -537,19 +478,13 @@ function parseRuleList(
         rawType = "host";
         pattern = domain;
       }
-    }
-    // URL rule
-    else if (line.startsWith("|")) {
+    } else if (line.startsWith("|")) {
       rawType = "url";
       pattern = line.slice(1);
-    }
-    // Regex rule
-    else if (line.startsWith("/") && line.endsWith("/")) {
+    } else if (line.startsWith("/") && line.endsWith("/")) {
       rawType = "regex";
       pattern = line.slice(1, -1);
-    }
-    // Wildcard URL
-    else {
+    } else {
       rawType = "url";
       pattern = `*://*${line}*`;
     }
@@ -566,16 +501,78 @@ function parseRuleList(
   return rules;
 }
 
+const BASE_SWITCH_RULES_LENGTH = "__baseSwitchRulesLength";
+
+type RuntimeProfileMeta = Profile & {
+  [BASE_SWITCH_RULES_LENGTH]?: number;
+};
+
 function mergeRuleList(
   config: ProxyConfig,
   profileName: string,
   ruleEntries: SwitchRule[],
 ): void {
-  for (const p of config.profileConfig) {
-    if (p.name !== profileName || p.type !== "autoSwitch") continue;
-    // Push entries to the end (after local rules)
-    p.switchRules = [...(p.switchRules ?? []), ...ruleEntries];
+  for (const profile of config.profileConfig) {
+    if (profile.name !== profileName || profile.type !== "autoSwitch") continue;
+
+    const p = profile as RuntimeProfileMeta;
+    const currentRules = p.switchRules ?? [];
+    const baseLength = p[BASE_SWITCH_RULES_LENGTH] ?? currentRules.length;
+    p[BASE_SWITCH_RULES_LENGTH] = baseLength;
+
+    const baseRules = currentRules.slice(0, baseLength);
+    p.switchRules = [...baseRules, ...ruleEntries];
   }
+}
+
+function isGeneratedDefaultRule(rule: SwitchRule): boolean {
+  const note = rule.note ?? "";
+
+  if (note === "Try direct, proxy on failure") {
+    return (
+      rule.profileName === "default proxy" &&
+      rule.conditions?.length === 1 &&
+      rule.conditions[0]?.type === "host" &&
+      rule.conditions[0]?.pattern === "*"
+    );
+  }
+
+  if (note === "Local/intranet") {
+    const patterns = (rule.conditions ?? []).map((c) => c.pattern ?? "");
+    return (
+      rule.profileName === "direct" &&
+      patterns.length === 5 &&
+      patterns.includes("localhost") &&
+      patterns.includes("127.0.0.1") &&
+      patterns.includes("*.local") &&
+      patterns.includes("10.*") &&
+      patterns.includes("192.168.*")
+    );
+  }
+
+  return false;
+}
+
+function stripRuntimeRuleLists(config: ProxyConfig): ProxyConfig {
+  return {
+    ...config,
+    profileConfig: config.profileConfig.map((profile) => {
+      if (profile.type !== "autoSwitch") {
+        return { ...profile };
+      }
+
+      const runtimeProfile = profile as RuntimeProfileMeta;
+      const baseLength = runtimeProfile[BASE_SWITCH_RULES_LENGTH];
+      const baseRules = baseLength === undefined
+        ? (profile.switchRules ?? [])
+        : (profile.switchRules ?? []).slice(0, baseLength);
+
+      return {
+        ...profile,
+        switchRules: baseRules.filter((rule) => !isGeneratedDefaultRule(rule)),
+      };
+    }),
+  };
 }
 
 function tryLoadRuleListFile(
@@ -598,8 +595,8 @@ function tryLoadRuleListFile(
 
 export function needsRuleListDownload(config: ProxyConfig): boolean {
   let configDir = join(homedir(), ".pi");
-  const projectPaths = getProjectConfigPaths();
-  if (projectPaths && (existsSync(projectPaths.jsonc) || existsSync(projectPaths.json))) {
+  const projectPath = getProjectConfigPath();
+  if (projectPath && existsSync(projectPath)) {
     configDir = join(process.cwd(), ".pi");
   }
 
@@ -632,17 +629,13 @@ function rawFetch(url: string): Promise<string> {
 }
 
 export async function syncRuleList(config: ProxyConfig): Promise<void> {
-  const globalPaths = getGlobalConfigPaths();
-  const globalDir = join(homedir(), ".pi");
-  let configDir = globalDir;
+  let configDir = join(homedir(), ".pi");
 
-  // If project-local config exists, use its dir
-  const projectPaths = getProjectConfigPaths();
-  if (projectPaths && (existsSync(projectPaths.jsonc) || existsSync(projectPaths.json))) {
+  const projectPath = getProjectConfigPath();
+  if (projectPath && existsSync(projectPath)) {
     configDir = join(process.cwd(), ".pi");
   }
 
-  // Scan for autoSwitch profiles with ruleListURL
   for (const profile of config.profileConfig) {
     if (profile.type !== "autoSwitch" || !profile.ruleListURL) continue;
 
@@ -650,31 +643,22 @@ export async function syncRuleList(config: ProxyConfig): Promise<void> {
     const name = profile.name;
     const ruleListFile = getRuleListPath(configDir, name);
 
-    // Download rule list
     if (!existsSync(ruleListFile)) {
       try {
         console.error(`[proxy] Downloading rule list from ${url}...`);
         const raw = await rawFetch(url);
-        // gfwlist is base64-encoded
         const cleaned = raw.replace(/\s/g, "");
-        let decoded: string;
-        if (/^[A-Za-z0-9+/=]+$/.test(cleaned)) {
-          decoded = Buffer.from(cleaned, "base64").toString("utf8");
-        } else {
-          decoded = raw;
-        }
+        const decoded = /^[A-Za-z0-9+/=]+$/.test(cleaned)
+          ? Buffer.from(cleaned, "base64").toString("utf8")
+          : raw;
         writeFileSync(ruleListFile, decoded, "utf8");
-        console.error(
-          `[proxy] Rule list saved to ${ruleListFile}`,
-        );
+        console.error(`[proxy] Rule list saved to ${ruleListFile}`);
       } catch (err) {
         console.error(`[proxy] Rule list download failed:`, err);
         continue;
       }
     }
 
-    // Determine which proxy profile to use as default for rule entries
-    // Look for the catch-all rule's profileName, or use the first proxy_server
     let defaultProfile = "my clash";
     const proxyProfile = config.profileConfig.find(
       (p) => p.type === "proxy_server" && p.server,

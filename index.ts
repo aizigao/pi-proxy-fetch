@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { ProxyAgent, fetch as undiciFetch } from "undici";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
@@ -8,7 +11,7 @@ import {
   syncRuleList,
   needsRuleListDownload,
 } from "./lib/config.js";
-import type { ProxyConfig } from "./lib/config.js";
+import type { Profile, ProxyConfig } from "./lib/config.js";
 import { routeRequest } from "./lib/router.js";
 import { formatStats } from "./lib/stats.js";
 
@@ -47,12 +50,49 @@ export default function (pi: ExtensionAPI) {
 
     let underlyingFetch: typeof fetch = globalThis.fetch;
     const agentCache = new Map<string, ProxyAgent>();
+    const certCache = new Map<string, string>();
 
-    const getAgent = (proxyUrl: string): ProxyAgent => {
-      const cached = agentCache.get(proxyUrl);
+    const expandHome = (input: string): string =>
+      input.startsWith("~/") ? join(homedir(), input.slice(2)) : input;
+
+    const findProxyProfile = (
+      config: ProxyConfig,
+      profileName: string,
+    ): Profile | undefined => {
+      return config.profileConfig.find(
+        (p) => p.name === profileName && p.type === "proxy_server",
+      );
+    };
+
+    const readCaCert = (caCertPath: string): string | undefined => {
+      const resolved = expandHome(caCertPath);
+      const cached = certCache.get(resolved);
+      if (cached !== undefined) return cached;
+      if (!existsSync(resolved)) return undefined;
+      const content = readFileSync(resolved, "utf8");
+      certCache.set(resolved, content);
+      return content;
+    };
+
+    const getAgent = (
+      proxyUrl: string,
+      caCertPath?: string,
+    ): ProxyAgent => {
+      const key = `${proxyUrl}::${caCertPath ?? ""}`;
+      const cached = agentCache.get(key);
       if (cached) return cached;
-      const agent = new ProxyAgent(proxyUrl);
-      agentCache.set(proxyUrl, agent);
+
+      const ca = caCertPath ? readCaCert(caCertPath) : undefined;
+      const proxyIsHttps = proxyUrl.startsWith("https://");
+      const agent = ca
+        ? new ProxyAgent({
+            uri: proxyUrl,
+            requestTls: { ca },
+            ...(proxyIsHttps ? { proxyTls: { ca } } : {}),
+          })
+        : new ProxyAgent(proxyUrl);
+
+      agentCache.set(key, agent);
       return agent;
     };
 
@@ -74,7 +114,8 @@ export default function (pi: ExtensionAPI) {
         return underlyingFetch(input, init);
       }
 
-      const dispatcher = getAgent(result.server);
+      const profile = findProxyProfile(config, result.profileName);
+      const dispatcher = getAgent(result.server, profile?.caCertPath);
       return undiciFetch(
         input as Parameters<typeof undiciFetch>[0],
         { ...init, dispatcher } as Parameters<typeof undiciFetch>[1],
@@ -114,7 +155,7 @@ export default function (pi: ExtensionAPI) {
       const config = currentConfig;
       if (!config) {
         ctx.ui.notify(
-          "No proxy config found. Create ~/.pi/proxy.jsonc",
+          "No proxy config found. Create ~/.pi/proxy.json or ./.pi/proxy.json",
           "warning",
         );
         return;
@@ -186,8 +227,8 @@ export default function (pi: ExtensionAPI) {
             .map((rule, i) => {
               const conds = (rule.conditions ?? [])
                 .map((c) =>
-                  c.type === "DisabledCondition"
-                    ? "Disabled"
+                  c.type === "disabled"
+                    ? "disabled"
                     : `${c.type}: ${c.pattern ?? "*"}`,
                 )
                 .join(" AND ") || "(always)";
@@ -229,10 +270,13 @@ export default function (pi: ExtensionAPI) {
         return `${marker} ${p.name}  —  ${p.note}`;
       });
 
+      const toggleEnabledLabel = config.enabled ? "Disable proxy" : "Enable proxy";
+
       const choice = await ctx.ui.select(
         `proxy [${currentName}]`,
         [
           ...choices,
+          toggleEnabledLabel,
           "Show stats",
           "Show rules",
           "Refresh rule list files",
@@ -259,6 +303,24 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
+      if (choice === toggleEnabledLabel) {
+        config.enabled = !config.enabled;
+        try {
+          writeConfig(config);
+          currentConfig = readConfig();
+          ctx.ui.notify(
+            `Proxy ${config.enabled ? "enabled" : "disabled"}.`,
+            "info",
+          );
+        } catch (err) {
+          ctx.ui.notify(
+            `Failed to update enabled: ${err instanceof Error ? err.message : String(err)}`,
+            "error",
+          );
+        }
+        return;
+      }
+
       if (choice === "Show stats") {
         ctx.ui.notify(formatStats(), "info");
         return;
@@ -271,8 +333,8 @@ export default function (pi: ExtensionAPI) {
             .map((rule, i) => {
               const conds = (rule.conditions ?? [])
                 .map((c) =>
-                  c.type === "DisabledCondition"
-                    ? "Disabled"
+                  c.type === "disabled"
+                    ? "disabled"
                     : `${c.type}: ${c.pattern ?? "*"}`,
                 )
                 .join(" AND ") || "(always)";

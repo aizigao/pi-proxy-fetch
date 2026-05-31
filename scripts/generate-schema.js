@@ -11,7 +11,7 @@ const schema = {
   $schema: "https://json-schema.org/draft-07/schema#",
   $id: "https://github.com/aizigao/pi-proxy-fetch/schema.json",
   title: "pi-proxy-fetch Config",
-  description: "Configuration schema for @aizigao/pi-proxy-fetch proxy.jsonc",
+  description: "Configuration schema for @aizigao/pi-proxy-fetch proxy.json",
   type: "object",
   required: ["enabled", "profileName", "profileConfig"],
   additionalProperties: false,
@@ -62,6 +62,10 @@ const schema = {
         server: {
           type: "string",
           description: "Proxy URL (e.g. socks5://127.0.0.1:7890).",
+        },
+        caCertPath: {
+          type: "string",
+          description: "Optional CA certificate path for this proxy server (e.g. Whistle root.crt).",
         },
       },
     },

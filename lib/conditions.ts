@@ -135,16 +135,16 @@ function matchCondition(
   hostname: string,
 ): boolean {
   switch (condition.type) {
-    case "HostWildcardCondition":
+    case "host":
       return matchesHostWildcard(hostname, condition.pattern ?? "*");
 
-    case "UrlWildcardCondition":
+    case "url":
       return matchesUrlWildcard(url, condition.pattern ?? "*");
 
-    case "UrlRegexCondition":
+    case "regex":
       return matchesUrlRegex(url, condition.pattern ?? "");
 
-    case "DisabledCondition":
+    case "disabled":
       return false;
 
     default:

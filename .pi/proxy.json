@@ -1,0 +1,52 @@
+{
+  "$schema": "../schema.json",
+  "enabled": true,
+  "profileName": "auto switch",
+  "profileConfig": [
+    {
+      "name": "my_clash",
+      "type": "proxy_server",
+      "server": "http://127.0.0.1:7890"
+    },
+    {
+      "name": "whistle",
+      "type": "proxy_server",
+      "server": "http://127.0.0.1:8899",
+      "caCertPath": "~/.WhistleAppData/.whistle/certs/root.crt"
+    },
+    {
+      "name": "auto switch",
+      "type": "autoSwitch",
+      "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
+      "switchRules": [
+        {
+          "note": "AI APIs",
+          "conditions": [
+            {
+              "type": "host",
+              "pattern": "api.openai.com"
+            },
+            {
+              "type": "host",
+              "pattern": "api.anthropic.com"
+            },
+            {
+              "type": "host",
+              "pattern": "generativelanguage.googleapis.com"
+            }
+          ],
+          "profileName": "direct"
+        },
+        {
+          "note": "Force proxy",
+          "conditions": [
+            { "type": "host", "pattern": "*.brave.com" },
+            { "type": "host", "pattern": "opencode.ai" },
+            { "type": "host", "pattern": "*.github.com" }
+          ],
+          "profileName": "my_clash"
+        }
+      ]
+    }
+  ]
+}

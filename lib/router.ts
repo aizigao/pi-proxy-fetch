@@ -5,7 +5,7 @@ import { stats } from "./stats.js";
 
 export type RouteResult =
   | { action: "direct" }
-  | { action: "proxy"; server: string };
+  | { action: "proxy"; server: string; profileName: string };
 
 export function routeRequest(
   config: ProxyConfig,
@@ -21,36 +21,32 @@ export function routeRequest(
     (p) => p.name === config.profileName,
   );
 
-  // Direct reservation
   if (config.profileName === "direct") {
     stats.direct += 1;
     return { action: "direct" };
   }
 
-  // System proxy
   if (config.profileName === "system") {
     const server = resolveProxyServer(config, "system");
     if (server) {
       stats.proxy += 1;
-      return { action: "proxy", server };
+      return { action: "proxy", server, profileName: "system" };
     }
     stats.direct += 1;
     return { action: "direct" };
   }
 
-  // Proxy server: all requests go through this proxy
   if (activeProfile && activeProfile.type === "proxy_server") {
     const server =
       activeProfile.server ?? resolveProxyServer(config, activeProfile.name);
     if (server) {
       stats.proxy += 1;
-      return { action: "proxy", server };
+      return { action: "proxy", server, profileName: activeProfile.name };
     }
     stats.direct += 1;
     return { action: "direct" };
   }
 
-  // Auto switch: match rules
   if (activeProfile && activeProfile.type === "autoSwitch") {
     const rules = activeProfile.switchRules;
     if (!rules || rules.length === 0) {
@@ -73,14 +69,13 @@ export function routeRequest(
     const server = resolveProxyServer(config, targetName);
     if (server) {
       stats.proxy += 1;
-      return { action: "proxy", server };
+      return { action: "proxy", server, profileName: targetName };
     }
 
     stats.direct += 1;
     return { action: "direct" };
   }
 
-  // Fallback: direct
   stats.direct += 1;
   return { action: "direct" };
 }
