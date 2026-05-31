@@ -43,26 +43,12 @@ export interface Profile {
 }
 
 export interface ProxyConfig {
+  version: number;
   enabled: boolean;
   profileName: string;
   profileConfig: Profile[];
 }
 
-// Old format types (for migration)
-type LegacyAction = "direct" | "proxy" | "fallback";
-
-interface LegacyRule {
-  match?: string;
-  action?: LegacyAction;
-  comment?: string;
-}
-
-interface LegacyConfig {
-  enabled?: boolean;
-  proxy?: string;
-  mode?: LegacyAction;
-  rules?: LegacyRule[];
-}
 
 // =============================================================================
 // Path helpers
@@ -84,10 +70,6 @@ function getProjectConfigPath(): string | null {
 }
 
 function getGlobalConfigPath(): string {
-  return join(homedir(), ".pi", "proxy.json");
-}
-
-function getLegacyConfigPath(): string {
   return join(getAgentDir(), "proxy.json");
 }
 
@@ -95,83 +77,18 @@ function processContent(raw: string): unknown {
   return JSON.parse(raw);
 }
 
-// =============================================================================
-// Legacy migration
-// =============================================================================
-
-function migrateLegacyAction(action: LegacyAction | undefined): string {
-  switch (action) {
-    case "direct":
-      return "direct";
-    case "proxy":
-    case "fallback":
-      return "default proxy";
-    default:
-      return "default proxy";
-  }
+function createDefaultConfig(): ProxyConfig {
+  return {
+    version: 1,
+    enabled: false,
+    profileName: "direct",
+    profileConfig: [],
+  };
 }
 
-function migrateLegacyConfig(legacy: LegacyConfig): ProxyConfig {
-  const proxyServerName = "default proxy";
-  const profileConfig: Profile[] = [];
-
-  if (legacy.proxy) {
-    profileConfig.push({
-      name: proxyServerName,
-      type: "proxy_server",
-      server: legacy.proxy,
-    });
-  }
-
-  const switchRules: SwitchRule[] = (legacy.rules ?? []).map((rule) => {
-    const patterns = (rule.match ?? "*")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    return {
-      note: rule.comment,
-      conditions: patterns.map((pattern) => ({
-        type: pattern.includes("*://") || pattern.includes("http") ? "url" : "host",
-        pattern,
-      })),
-      profileName: migrateLegacyAction(rule.action),
-    };
-  });
-
-  let profileName: string;
-  if (legacy.mode === "direct") {
-    profileName = "direct";
-  } else if (legacy.mode === "proxy") {
-    profileName = proxyServerName;
-  } else {
-    profileName = "auto switch";
-  }
-
-  if (switchRules.length > 0) {
-    profileConfig.push({
-      name: "auto switch",
-      type: "autoSwitch",
-      switchRules,
-    });
-  }
-
-  if (
-    profileName === "auto switch" &&
-    !profileConfig.find((p) => p.name === "auto switch")
-  ) {
-    profileConfig.push({
-      name: "auto switch",
-      type: "autoSwitch",
-      switchRules,
-    });
-  }
-
-  return {
-    enabled: legacy.enabled ?? true,
-    profileName,
-    profileConfig,
-  };
+function getBackupPath(filePath: string): string {
+  const dir = filePath.substring(0, filePath.lastIndexOf("/"));
+  return `${dir}/proxy.bak.json`;
 }
 
 // =============================================================================
@@ -249,6 +166,10 @@ function validateConfig(raw: unknown): ProxyConfig | string {
 
   const obj = raw as Record<string, unknown>;
 
+  if (obj.version !== 1) {
+    return '"version" must be 1';
+  }
+
   if (typeof obj.enabled !== "boolean") {
     return '"enabled" must be a boolean';
   }
@@ -315,13 +236,27 @@ function tryLoadFile(filePath: string, label: string): ProxyConfig | null {
     const parsed = processContent(raw);
     const result = validateConfig(parsed);
     if (typeof result === "string") {
+      if (result === '"version" must be 1') {
+        const backupPath = getBackupPath(filePath);
+        writeFileSync(backupPath, raw, "utf8");
+        const defaultConfig = createDefaultConfig();
+        writeFileSync(filePath, JSON.stringify(defaultConfig, null, 2) + "\n", "utf8");
+        _cached = defaultConfig;
+        console.error(`[proxy] Unsupported config version in ${label}. Backed up to ${backupPath} and created a default config.`);
+        console.error(
+          `[proxy] Please update your config to the current format. See: https://github.com/aizigao/pi-proxy-fetch/blob/master/README.md`,
+        );
+        return _cached;
+      }
+
       console.error(`[proxy] Invalid ${label}: ${result}`);
       return null;
     }
     _cached = normalizeConfig(result);
     return _cached;
   } catch (err) {
-    console.error(`[proxy] Failed to parse ${label}:`, err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[proxy] Failed to parse ${label}: ${message}`);
     return null;
   }
 }
@@ -340,30 +275,10 @@ export function readConfig(): ProxyConfig | null {
 
   // 2. Global proxy.json
   const globalPath = getGlobalConfigPath();
-  const fromGlobal = tryLoadFile(globalPath, "~/.pi/proxy.json");
+  const fromGlobal = tryLoadFile(globalPath, "~/.pi/agent/proxy.json");
   if (fromGlobal) {
-    loadRuleListsForConfig(fromGlobal, join(homedir(), ".pi"));
+    loadRuleListsForConfig(fromGlobal, getAgentDir());
     return fromGlobal;
-  }
-
-  // 3. Legacy migration
-  const legacyPath = getLegacyConfigPath();
-  if (existsSync(legacyPath)) {
-    try {
-      const raw = readFileSync(legacyPath, "utf8");
-      const legacy = JSON.parse(raw) as LegacyConfig;
-      const migrated = migrateLegacyConfig(legacy);
-
-      const outPath = getGlobalConfigPath();
-      writeFileSync(outPath, JSON.stringify(migrated, null, 2) + "\n", "utf8");
-      console.error(`[proxy] Migrated ~/.pi/agent/proxy.json → ~/.pi/proxy.json`);
-
-      _cached = normalizeConfig(migrated);
-      return _cached;
-    } catch (err) {
-      console.error("[proxy] Failed to migrate legacy config:", err);
-      return _cached;
-    }
   }
 
   return _cached;

@@ -22,6 +22,7 @@
   "files": [
     "index.ts",
     "lib/",
+    "assets/",
     "schema.json",
     "README.md",
     "LICENSE"
@@ -42,7 +43,8 @@
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "./assets/readme-cover.png"
   },
   "dependencies": {
     "undici": "^7.16.0"

@@ -13,9 +13,14 @@ const schema = {
   title: "pi-proxy-fetch Config",
   description: "Configuration schema for @aizigao/pi-proxy-fetch proxy.json",
   type: "object",
-  required: ["enabled", "profileName", "profileConfig"],
+  required: ["version", "enabled", "profileName", "profileConfig"],
   additionalProperties: false,
   properties: {
+    version: {
+      type: "number",
+      const: 1,
+      description: "Config schema version.",
+    },
     enabled: {
       type: "boolean",
       description: "Global ON/OFF switch.",

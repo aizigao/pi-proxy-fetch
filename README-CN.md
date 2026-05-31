@@ -1,8 +1,13 @@
 # @aizigao/pi-proxy-fetch
 
+
+[![npm version](https://img.shields.io/npm/v/%40aizigao%2Fpi-proxy-fetch)](https://www.npmjs.com/package/@aizigao/pi-proxy-fetch)
+
 English: [`README.md`](./README.md)
 
 一个用于 Pi 的扩展包。它会在 Pi 会话内 patch `globalThis.fetch`，并按 SwitchyOmega 风格的 `switchRules` 将请求路由到不同代理 profile。
+
+![README cover](./assets/readme-cover.png)
 
 ## 功能
 
@@ -28,26 +33,21 @@ pi install npm:@aizigao/pi-proxy-fetch
 
 ## 配置
 
-推荐创建全局配置：`~/.pi/proxy.json`
-也支持项目配置：`.pi/proxy.json`
+推荐创建项目本地配置：`./.pi/proxy.json`
 
+也支持全局配置：`~/.pi/agent/proxy.json`
 
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/aizigao/pi-proxy-fetch/master/schema.json",
+  "version": 1,
   "enabled": true,
   "profileName": "auto switch",
   "profileConfig": [
     {
-      "name": "my clash",
+      "name": "my_clash",
       "type": "proxy_server",
-      "server": "socks5://127.0.0.1:7890"
-    },
-    {
-      "name": "whistle",
-      "type": "proxy_server",
-      "server": "http://127.0.0.1:8899",
-      "caCertPath": "~/.WhistleAppData/.whistle/certs/root.crt"
+      "server": "http://127.0.0.1:7890"
     },
     {
       "name": "auto switch",
@@ -55,32 +55,45 @@ pi install npm:@aizigao/pi-proxy-fetch
       "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
       "switchRules": [
         {
-          "note": "my direct list",
+          "note": "AI APIs",
           "conditions": [
-            { "type": "host", "pattern": "api.openai.com" }
-            { "type": "host", "pattern": "api.anthropic.com" }
+            {
+              "type": "host",
+              "pattern": "api.openai.com"
+            },
+            {
+              "type": "host",
+              "pattern": "api.anthropic.com"
+            },
+            {
+              "type": "host",
+              "pattern": "generativelanguage.googleapis.com"
+            }
           ],
           "profileName": "direct"
         },
         {
-          "note": "host via Clash",
+          "note": "Force proxy",
           "conditions": [
-            { "type": "host", "pattern": "*.github.com" },
-            { "type": "url", "pattern": "*://*.google.com/*" }
+            { "type": "host", "pattern": "*.brave.com" },
+            { "type": "host", "pattern": "opencode.ai" },
+            { "type": "host", "pattern": "*.github.com" }
           ],
-          "profileName": "my clash"
+          "profileName": "my_clash"
         }
       ]
     }
   ]
 }
+
 ```
 
 ## 配置路径优先级
 
 1. `./.pi/proxy.json`（项目本地，优先）
-2. `~/.pi/proxy.json`（全局）
-3. 旧 `~/.pi/agent/proxy.json`（首次运行时自动迁移）
+2. `~/.pi/agent/proxy.json`（全局）
+
+> 只有带 `version: 1` 的配置会被识别为新格式；否则当前文件会被备份为 `proxy.bak.json`，并生成默认配置。
 
 ## 字段说明
 
@@ -88,6 +101,7 @@ pi install npm:@aizigao/pi-proxy-fetch
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
+| `version` | `1` | 新格式版本号，当前固定为 `1` |
 | `enabled` | `boolean` | 总开关。为 `false` 时直接绕过所有代理逻辑 |
 | `profileName` | `string` | 当前激活的 profile 名。保留值：`direct`、`system` |
 | `profileConfig` | `Profile[]` | profile 列表 |
@@ -138,8 +152,51 @@ pi install npm:@aizigao/pi-proxy-fetch
 
 ## ruleListURL 行为
 
-- `ruleListURL` 指向的内容会下载到**配置同目录**
-- 文件名格式：
+`ruleListURL` 主要适合中国用户接入 **gfwlist / AutoProxy** 这类现成规则集。
+
+典型场景：
+
+- 你有一套自己的本地规则：例如 OpenAI / Anthropic 直连、公司内网直连
+- 同时又希望把大量“需要代理的网站列表”直接复用现成规则，而不是手写几千条
+- 这时可以把远程规则挂在 `autoSwitch` profile 上，通过 `ruleListURL` 下载并参与匹配
+
+例如：
+
+```json
+{
+  "name": "auto switch",
+  "type": "autoSwitch",
+  "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
+  "switchRules": [
+    {
+      "note": "OpenAI direct",
+      "conditions": [
+        { "type": "host", "pattern": "api.openai.com" }
+      ],
+      "profileName": "direct"
+    },
+    {
+      "note": "Anthropic direct",
+      "conditions": [
+        { "type": "host", "pattern": "api.anthropic.com" }
+      ],
+      "profileName": "direct"
+    }
+  ]
+}
+```
+
+上面的含义是：
+
+1. **本地 `switchRules` 优先**：你自己写的规则先匹配
+2. 如果本地规则没命中，再继续使用 `ruleListURL` 下载下来的规则
+3. 如果远程规则也没命中，默认直连
+
+### 下载后保存在哪里
+
+`ruleListURL` 指向的内容会下载到**配置同目录**。
+
+文件名格式：
 
 ```text
 proxy-rulelist-file--{profile_name_safe}.txt
@@ -151,11 +208,26 @@ proxy-rulelist-file--{profile_name_safe}.txt
 ./.pi/proxy-rulelist-file--auto_switch.txt
 ```
 
+### 下载内容是什么格式
+
+如果你用的是 gfwlist：
+
+- 源文件通常是 **base64 编码**
+- 程序会自动解码
+- 保存成可读文本到本地 `proxy-rulelist-file--*.txt`
+- 然后再把其中的 AutoProxy 规则解析成运行期 `switchRules`
+
+### 什么时候会下载
+
 - `session_start` 时：如果本地文件已存在，就直接加载
 - 如果本地文件不存在，会自动下载一次
 - 也可以在 `/proxy` 菜单里手动执行 **Refresh rule list files**
+
+### 重要说明
+
 - 下载得到的远程规则只在**运行期**合并到内存，不会写回你的原始 `switchRules`
 - 切换 profile、reload、菜单操作都不会直接改你的原始规则内容
+- 所以你可以放心把 `ruleListURL` 当成“远程规则源”，而把 `switchRules` 当成“你自己维护的本地规则”
 
 ## 命令
 
@@ -172,6 +244,7 @@ proxy-rulelist-file--{profile_name_safe}.txt
 `/proxy` 交互菜单包含：
 
 - 选择 profile
+- Enable/Disable proxy
 - Show stats
 - Show rules
 - Refresh rule list files

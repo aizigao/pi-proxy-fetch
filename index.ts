@@ -155,7 +155,7 @@ export default function (pi: ExtensionAPI) {
       const config = currentConfig;
       if (!config) {
         ctx.ui.notify(
-          "No proxy config found. Create ~/.pi/proxy.json or ./.pi/proxy.json",
+          "No proxy config found. Create ./.pi/proxy.json or ~/.pi/agent/proxy.json",
           "warning",
         );
         return;

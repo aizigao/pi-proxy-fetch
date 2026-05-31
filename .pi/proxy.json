@@ -1,5 +1,6 @@
 {
   "$schema": "../schema.json",
+  "version": 1,
   "enabled": true,
   "profileName": "auto switch",
   "profileConfig": [
