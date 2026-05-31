@@ -23,13 +23,14 @@
     },
     "profileName": {
       "type": "string",
-      "description": "Currently active profile name. Reserved: \"direct\" (no proxy), \"system\" (system proxy).\nOther values must match a name in profileConfig.",
+      "pattern": "^[A-Za-z_-]+$",
+      "description": "Currently active profile name. Reserved: \"direct\" (no proxy), \"system\" (uses http_proxy env).\nOther values must match a name in profileConfig.",
       "examples": [
         "direct",
         "system",
-        "auto switch"
+        "auto-switch"
       ],
-      "default": "auto switch"
+      "default": "auto-switch"
     },
     "profileConfig": {
       "type": "array",
@@ -52,13 +53,15 @@
       "type": "object",
       "required": [
         "name",
-        "type"
+        "type",
+        "server"
       ],
       "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
-          "description": "Unique profile identifier."
+          "pattern": "^[A-Za-z_-]+$",
+          "description": "Unique profile identifier. Allowed characters: letters, underscore, and hyphen."
         },
         "type": {
           "type": "string",
@@ -86,7 +89,8 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Unique profile identifier."
+          "pattern": "^[A-Za-z_-]+$",
+          "description": "Unique profile identifier. Allowed characters: letters, underscore, and hyphen."
         },
         "type": {
           "type": "string",
@@ -119,13 +123,14 @@
         },
         "conditions": {
           "type": "array",
-          "description": "Condition list (AND logic). Empty or omitted = always match.",
+          "description": "Condition list (OR logic). Empty or omitted = always match.",
           "items": {
             "$ref": "#/definitions/SwitchCondition"
           }
         },
         "profileName": {
           "type": "string",
+          "pattern": "^[A-Za-z_-]+$",
           "description": "Target profile when rule matches. Reserved: \"direct\", \"system\".\nOther values must match a profile name in profileConfig.",
           "examples": [
             "direct",

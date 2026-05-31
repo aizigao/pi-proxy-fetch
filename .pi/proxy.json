@@ -2,7 +2,7 @@
   "$schema": "../schema.json",
   "version": 1,
   "enabled": true,
-  "profileName": "auto switch",
+  "profileName": "auto-switch",
   "profileConfig": [
     {
       "name": "my_clash",
@@ -16,7 +16,7 @@
       "caCertPath": "~/.WhistleAppData/.whistle/certs/root.crt"
     },
     {
-      "name": "auto switch",
+      "name": "auto-switch",
       "type": "autoSwitch",
       "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
       "switchRules": [

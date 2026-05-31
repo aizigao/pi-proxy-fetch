@@ -33,13 +33,13 @@
   "enabled": true,
 
   // 当前激活的 profile 名称
-  "profile_name": "auto switch",
+  "profile_name": "auto-switch",
 
   // Profile 列表
   "profileConfig": [
     // 自定义代理：Clash
     {
-      "name": "my clash",
+      "name": "my-clash",
       "type": "proxy_server",
       "server": "socks5://127.0.0.1:7890"
     },
@@ -51,7 +51,7 @@
     },
     // 自动切换 profile
     {
-      "name": "auto switch",
+      "name": "auto-switch",
       "type": "autoSwitch",
       "switchRules": [
         {
@@ -70,7 +70,7 @@
               "pattern": "*://*.google.com/*"
             }
           ],
-          "profileName": "my clash"
+          "profileName": "my-clash"
         },
         {
           "conditions": [
@@ -79,7 +79,7 @@
               "pattern": "*"
             }
           ],
-          "profileName": "my clash"
+          "profileName": "my-clash"
         }
       ]
     }
@@ -92,7 +92,7 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `enabled` | `boolean` | 全局开关 |
-| `profile_name` | `string` | 当前激活的 profile 名称。为 `"auto switch"` 类型时走 switchRules 规则匹配 |
+| `profile_name` | `string` | 当前激活的 profile 名称。自定义名称必须匹配 `^[A-Za-z_-]+$`；为 `"auto-switch"` 类型时走 switchRules 规则匹配 |
 | `profileConfig` | `Profile[]` | Profile 列表 |
 
 ### Profile 字段
@@ -112,7 +112,7 @@ switchRules 中 `profileName` 可使用以下保留名：
 | profileName | 行为 |
 |---|---|
 | `direct` | 直连，不走代理 |
-| `system` | 读取系统代理设置（`HTTP_PROXY` / `HTTPS_PROXY` 环境变量） |
+| `system` | 读取 `http_proxy` / `HTTP_PROXY` 环境变量 |
 | 其他 | 在 `profileConfig` 中查找对应的 `proxy_server`，取其 `server` 字段 |
 
 ### SwitchRule 字段
@@ -154,16 +154,14 @@ switchRules 中 `profileName` 可使用以下保留名：
 
 ```
 /proxy              → 交互菜单
-/proxy <profile>    → 切换激活的 profile（如 /proxy "my clash"）
+/proxy <profile>    → 切换激活的 profile（如 /proxy my-clash）
 /proxy stats        → 显示统计
-/proxy rules        → 显示当前 autoSwitch profile 的 switchRules
 /proxy reload       → 重新加载配置
 ```
 
 **交互菜单项**（在现有基础上扩展）：
 - 列出所有 profile，高亮当前激活的——选择后切换并写回 `profile_name`
 - `Show stats`（保留）
-- `Show rules`（调整为显示 autoSwitch 的 switchRules）
 - `Reload config`（保留）
 
 ## Project Structure
@@ -244,11 +242,11 @@ function resolveProfile(config: ProxyConfig): Profile | undefined {
 function resolveProxyServer(config: ProxyConfig, profileName: string): string | undefined {
   // 解析最终使用的代理地址：
   //   direct → undefined（直连）
-  //   system → process.env.HTTP_PROXY || process.env.HTTPS_PROXY
+  //   system → process.env.http_proxy || process.env.HTTP_PROXY
   //   其他   → 在 profileConfig 中查找 proxy_server，取其 server 字段
   if (profileName === "direct") return undefined;
   if (profileName === "system") {
-    const envProxy = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
+    const envProxy = process.env.http_proxy ?? process.env.HTTP_PROXY;
     return envProxy ?? undefined;
   }
   const profile = config.profileConfig.find(
@@ -297,6 +295,8 @@ function resolveProxyServer(config: ProxyConfig, profileName: string): string | 
 ### Phase 1: 配置层 (`lib/config.ts`)
 - JSONC 解析（strip `//` 和 `/* */` 注释）
 - `~/.pi/proxy.jsonc` / `~/.pi/proxy.json` 读取 + schema 校验
+- 当前无项目配置和全局配置时，自动生成全局默认配置
+- 全局 `ruleListURL` 下载文件保存到 `~/.pi/agent/proxy-rulelist-file--*.txt`
 - 旧 `~/.pi/agent/proxy.json` → `proxy.jsonc` 自动迁移
 - 模块级缓存 + `loadConfig()`/`reloadConfig()`
 
@@ -317,14 +317,13 @@ function resolveProxyServer(config: ProxyConfig, profileName: string): string | 
 ### Phase 4: 命令与迁移 (`index.ts`)
 - 现有 `/proxy` 交互菜单增加 profile 列表和切换选项
 - 新增 `/proxy <profile>` 子命令快速切换
-- `/proxy rules` 调整为显示 autoSwitch 的 switchRules
 - 旧格式自动迁移逻辑
 - System Proxy 环境变量读取
 - README 更新
 
 ### Phase 5: 配置校验与错误处理
 - JSONC 解析错误时 fallback 到最后已知有效配置
-- schema 校验（必填字段、类型检查、profileName 目标是否存在）
+- schema 校验（必填字段、类型检查、profileName 目标是否存在、自定义 profile 名称只允许字母/下划线/连字符）
 - 旧格式迁移幂等性（不重复覆盖已有 proxy.jsonc）
 
 ## Open Questions
