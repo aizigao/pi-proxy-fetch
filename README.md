@@ -10,10 +10,10 @@ A Pi extension package that patches `globalThis.fetch` inside a Pi session and r
 
 - **Multiple profiles**: define multiple proxy servers such as Clash or Whistle
 - **autoSwitch**: match requests by rules and route them to a target profile
-- **Built-in targets**: `direct` and `system` (`HTTP_PROXY` / `HTTPS_PROXY`)
+- **Built-in targets**: `direct` and `system` (`http_proxy` / `HTTP_PROXY` env)
 - **Remote rule lists**: `ruleListURL` downloads a local cached rule file and participates in matching
 - **Custom CA cert**: `proxy_server` supports optional `caCertPath` for tools like Whistle
-- **Interactive menu**: switch profiles, toggle enable/disable, inspect stats, inspect rules, refresh rule lists, reload config
+- **Interactive menu**: switch profiles, toggle enable/disable, inspect stats, refresh rule lists, reload config
 
 ## Requirements
 
@@ -37,15 +37,17 @@ Recommended project-local config: `./.pi/proxy.json`
 
 Global config is also supported: `~/.pi/agent/proxy.json`
 
+If neither config exists, a default global config is created at `~/.pi/agent/proxy.json`.
+
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/aizigao/pi-proxy-fetch/master/schema.json",
   "version": 1,
   "enabled": true,
-  "profileName": "auto switch",
+  "profileName": "auto-switch",
   "profileConfig": [
     {
-      "name": "my clash",
+      "name": "my-clash",
       "type": "proxy_server",
       "server": "socks5://127.0.0.1:7890"
     },
@@ -56,7 +58,7 @@ Global config is also supported: `~/.pi/agent/proxy.json`
       "caCertPath": "~/.WhistleAppData/.whistle/certs/root.crt"
     },
     {
-      "name": "auto switch",
+      "name": "auto-switch",
       "type": "autoSwitch",
       "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
       "switchRules": [
@@ -79,14 +81,14 @@ Global config is also supported: `~/.pi/agent/proxy.json`
           "conditions": [
             { "type": "host", "pattern": "*.github.com" }
           ],
-          "profileName": "my clash"
+          "profileName": "my-clash"
         },
         {
           "note": "Google via Clash",
           "conditions": [
             { "type": "url", "pattern": "*://*.google.com/*" }
           ],
-          "profileName": "my clash"
+          "profileName": "my-clash"
         }
       ]
     }
@@ -107,23 +109,23 @@ Global config is also supported: `~/.pi/agent/proxy.json`
 |---|---|---|
 | `version` | `1` | Current config schema version |
 | `enabled` | `boolean` | Master on/off switch. `false` bypasses all proxy logic |
-| `profileName` | `string` | Active profile name. Reserved values: `direct`, `system` |
+| `profileName` | `string` | Active profile name. Reserved values: `direct`, `system`; custom names must match `^[A-Za-z_-]+$` |
 | `profileConfig` | `Profile[]` | Profile list |
 
 ## `proxy_server` fields
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | `string` | Profile name |
+| `name` | `string` | Profile name; must match `^[A-Za-z_-]+$` |
 | `type` | `"proxy_server"` | Fixed value |
-| `server` | `string` | Proxy URL, e.g. `socks5://127.0.0.1:7890` |
+| `server` | `string` | Required proxy URL, e.g. `socks5://127.0.0.1:7890` |
 | `caCertPath` | `string?` | Optional CA certificate path, useful for Whistle-style self-signed proxies |
 
 ## `autoSwitch` fields
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | `string` | Profile name |
+| `name` | `string` | Profile name; must match `^[A-Za-z_-]+$` |
 | `type` | `"autoSwitch"` | Fixed value |
 | `ruleListURL` | `string?` | Remote rule list URL |
 | `switchRules` | `SwitchRule[]` | Local rules |
@@ -133,8 +135,8 @@ Global config is also supported: `~/.pi/agent/proxy.json`
 | Field | Type | Description |
 |---|---|---|
 | `note` | `string?` | Note |
-| `conditions` | `Condition[]?` | Condition list with **AND** logic; empty means always match |
-| `profileName` | `string` | Target profile. Reserved: `direct`, `system` |
+| `conditions` | `Condition[]?` | Condition list with **OR** logic; empty means always match |
+| `profileName` | `string` | Target profile. Reserved: `direct`, `system`; custom names must match `^[A-Za-z_-]+$` |
 
 ## `Condition` fields
 
@@ -157,7 +159,8 @@ Global config is also supported: `~/.pi/agent/proxy.json`
 ## `ruleListURL` behavior
 
 - `ruleListURL` is useful when you want to reuse a remote ruleset such as gfwlist / AutoProxy
-- The downloaded content is saved next to the config file
+- Project configs save downloaded content next to the project config file
+- Global configs save downloaded content under `~/.pi/agent`
 - Filename format:
 
 ```text
@@ -168,6 +171,7 @@ Example:
 
 ```text
 ./.pi/proxy-rulelist-file--auto_switch.txt
+~/.pi/agent/proxy-rulelist-file--auto_switch.txt
 ```
 
 Behavior:
@@ -185,9 +189,8 @@ Run inside Pi:
 ```text
 /proxy            # open interactive menu
 /proxy stats      # show stats
-/proxy rules      # show current autoSwitch rules
 /proxy reload     # reload config
-/proxy "name"     # switch directly to a profile
+/proxy name       # switch directly to a profile
 ```
 
 The `/proxy` menu includes:
@@ -195,7 +198,6 @@ The `/proxy` menu includes:
 - Select profile
 - Enable/Disable proxy
 - Show stats
-- Show rules
 - Refresh rule list files
 - Reload config
 

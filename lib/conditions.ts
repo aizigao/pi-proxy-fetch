@@ -14,9 +14,7 @@ function wildcardToRegex(pattern: string): string {
 
   while (i < pattern.length) {
     if (pattern[i] === "*") {
-      let starCount = 0;
       while (i < pattern.length && pattern[i] === "*") {
-        starCount++;
         i++;
       }
       // Treat any run of * as .* (greedy)
@@ -153,7 +151,7 @@ function matchCondition(
 }
 
 // =============================================================================
-// Rule matching (AND logic)
+// Rule matching (OR logic)
 // =============================================================================
 
 export function matchRule(rule: SwitchRule, url: string, hostname: string): boolean {
@@ -163,7 +161,7 @@ export function matchRule(rule: SwitchRule, url: string, hostname: string): bool
     return true;
   }
 
-  return conditions.every((c) => matchCondition(c, url, hostname));
+  return conditions.some((c) => matchCondition(c, url, hostname));
 }
 
 // Find the first matching rule in the list

@@ -15,10 +15,10 @@ English: [`README.md`](./README.md)
 
 - **多 profile**：定义多个代理服务器（如 Clash、Whistle）
 - **autoSwitch**：按规则匹配请求并路由到目标 profile
-- **内置目标**：`direct`（直连）、`system`（读取环境变量 `HTTP_PROXY` / `HTTPS_PROXY`）
+- **内置目标**：`direct`（直连）、`system`（读取环境变量 `http_proxy` / `HTTP_PROXY`）
 - **远程规则列表**：`ruleListURL` 下载到本地文件后参与匹配
 - **证书配置**：`proxy_server` 可选 `caCertPath`，适配 Whistle 等自签证书代理
-- **菜单操作**：切换 profile、查看 stats、查看 rules、刷新 rule list、重载配置
+- **菜单操作**：切换 profile、查看 stats、刷新 rule list、重载配置
 
 ## 环境要求
 
@@ -37,12 +37,14 @@ pi install npm:@aizigao/pi-proxy-fetch
 
 也支持全局配置：`~/.pi/agent/proxy.json`
 
+如果项目和全局配置都不存在，会自动在 `~/.pi/agent/proxy.json` 生成默认配置。
+
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/aizigao/pi-proxy-fetch/master/schema.json",
   "version": 1,
   "enabled": true,
-  "profileName": "auto switch",
+  "profileName": "auto-switch",
   "profileConfig": [
     {
       "name": "my_clash",
@@ -50,7 +52,7 @@ pi install npm:@aizigao/pi-proxy-fetch
       "server": "http://127.0.0.1:7890"
     },
     {
-      "name": "auto switch",
+      "name": "auto-switch",
       "type": "autoSwitch",
       "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
       "switchRules": [
@@ -103,23 +105,23 @@ pi install npm:@aizigao/pi-proxy-fetch
 |---|---|---|
 | `version` | `1` | 新格式版本号，当前固定为 `1` |
 | `enabled` | `boolean` | 总开关。为 `false` 时直接绕过所有代理逻辑 |
-| `profileName` | `string` | 当前激活的 profile 名。保留值：`direct`、`system` |
+| `profileName` | `string` | 当前激活的 profile 名。保留值：`direct`、`system`；自定义名称必须匹配 `^[A-Za-z_-]+$` |
 | `profileConfig` | `Profile[]` | profile 列表 |
 
 ### `proxy_server` 字段
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `name` | `string` | profile 名称 |
+| `name` | `string` | profile 名称，必须匹配 `^[A-Za-z_-]+$` |
 | `type` | `"proxy_server"` | 固定值 |
-| `server` | `string` | 代理地址，如 `socks5://127.0.0.1:7890` |
+| `server` | `string` | 必填代理地址，如 `socks5://127.0.0.1:7890` |
 | `caCertPath` | `string?` | 可选 CA 证书路径。适合 Whistle 等自签证书代理 |
 
 ### `autoSwitch` 字段
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `name` | `string` | profile 名称 |
+| `name` | `string` | profile 名称，必须匹配 `^[A-Za-z_-]+$` |
 | `type` | `"autoSwitch"` | 固定值 |
 | `ruleListURL` | `string?` | 远程规则列表地址 |
 | `switchRules` | `SwitchRule[]` | 本地规则 |
@@ -129,8 +131,8 @@ pi install npm:@aizigao/pi-proxy-fetch
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `note` | `string?` | 备注 |
-| `conditions` | `Condition[]?` | 条件列表，**AND 逻辑**；空则视为始终命中 |
-| `profileName` | `string` | 目标 profile。也可用 `direct` / `system` |
+| `conditions` | `Condition[]?` | 条件列表，**OR 逻辑**；空则视为始终命中 |
+| `profileName` | `string` | 目标 profile。也可用 `direct` / `system`；自定义名称必须匹配 `^[A-Za-z_-]+$` |
 
 ### `Condition` 字段
 
@@ -164,7 +166,7 @@ pi install npm:@aizigao/pi-proxy-fetch
 
 ```json
 {
-  "name": "auto switch",
+  "name": "auto-switch",
   "type": "autoSwitch",
   "ruleListURL": "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt",
   "switchRules": [
@@ -194,7 +196,8 @@ pi install npm:@aizigao/pi-proxy-fetch
 
 ### 下载后保存在哪里
 
-`ruleListURL` 指向的内容会下载到**配置同目录**。
+项目配置的 `ruleListURL` 内容会下载到**项目配置同目录**。
+全局配置的 `ruleListURL` 内容会下载到 `~/.pi/agent`。
 
 文件名格式：
 
@@ -206,6 +209,7 @@ proxy-rulelist-file--{profile_name_safe}.txt
 
 ```text
 ./.pi/proxy-rulelist-file--auto_switch.txt
+~/.pi/agent/proxy-rulelist-file--auto_switch.txt
 ```
 
 ### 下载内容是什么格式
@@ -236,9 +240,8 @@ proxy-rulelist-file--{profile_name_safe}.txt
 ```text
 /proxy            # 打开交互菜单
 /proxy stats      # 查看统计
-/proxy rules      # 查看当前 autoSwitch 规则
 /proxy reload     # 重载配置
-/proxy "name"     # 直接切换到某个 profile
+/proxy name       # 直接切换到某个 profile
 ```
 
 `/proxy` 交互菜单包含：
@@ -246,7 +249,6 @@ proxy-rulelist-file--{profile_name_safe}.txt
 - 选择 profile
 - Enable/Disable proxy
 - Show stats
-- Show rules
 - Refresh rule list files
 - Reload config
 

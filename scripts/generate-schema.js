@@ -27,11 +27,12 @@ const schema = {
     },
     profileName: {
       type: "string",
+      pattern: "^[A-Za-z_-]+$",
       description:
-        'Currently active profile name. Reserved: "direct" (no proxy), "system" (system proxy).\n' +
+        'Currently active profile name. Reserved: "direct" (no proxy), "system" (uses http_proxy env).\n' +
         "Other values must match a name in profileConfig.",
-      examples: ["direct", "system", "auto switch"],
-      default: "auto switch",
+      examples: ["direct", "system", "auto-switch"],
+      default: "auto-switch",
     },
     profileConfig: {
       type: "array",
@@ -53,12 +54,13 @@ const schema = {
     ProxyServerProfile: {
       title: "Proxy Server Profile",
       type: "object",
-      required: ["name", "type"],
+      required: ["name", "type", "server"],
       additionalProperties: false,
       properties: {
         name: {
           type: "string",
-          description: "Unique profile identifier.",
+          pattern: "^[A-Za-z_-]+$",
+          description: "Unique profile identifier. Allowed characters: letters, underscore, and hyphen.",
         },
         type: {
           type: "string",
@@ -83,7 +85,8 @@ const schema = {
       properties: {
         name: {
           type: "string",
-          description: "Unique profile identifier.",
+          pattern: "^[A-Za-z_-]+$",
+          description: "Unique profile identifier. Allowed characters: letters, underscore, and hyphen.",
         },
         type: {
           type: "string",
@@ -116,13 +119,14 @@ const schema = {
         conditions: {
           type: "array",
           description:
-            "Condition list (AND logic). Empty or omitted = always match.",
+            "Condition list (OR logic). Empty or omitted = always match.",
           items: {
             $ref: "#/definitions/SwitchCondition",
           },
         },
         profileName: {
           type: "string",
+          pattern: "^[A-Za-z_-]+$",
           description:
             'Target profile when rule matches. Reserved: "direct", "system".\n' +
             "Other values must match a profile name in profileConfig.",
