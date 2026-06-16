@@ -3,11 +3,11 @@
 
 [![npm version](https://img.shields.io/npm/v/%40aizigao%2Fpi-proxy-fetch)](https://www.npmjs.com/package/@aizigao/pi-proxy-fetch)
 
-English: [`README.md`](./README.md)
+English: [`README.md`](https://github.com/aizigao/pi-proxy-fetch/blob/master/README.md)
 
 一个用于 Pi 的扩展包。它会在 Pi 会话内 patch `globalThis.fetch`，并按 SwitchyOmega 风格的 `switchRules` 将请求路由到不同代理 profile。
 
-![README cover](./assets/readme-cover.png)
+![README cover](https://raw.githubusercontent.com/aizigao/pi-proxy-fetch/master/assets/readme-cover.png)
 
 ## 功能
 

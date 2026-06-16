@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40aizigao%2Fpi-proxy-fetch)](https://www.npmjs.com/package/@aizigao/pi-proxy-fetch)
 
-Chinese: [`README-CN.md`](./README-CN.md)
+Chinese: [`README-CN.md`](https://github.com/aizigao/pi-proxy-fetch/blob/master/README-CN.md)
 
 A Pi extension package that patches `globalThis.fetch` inside a Pi session and routes requests through SwitchyOmega-style `switchRules` and proxy profiles.
 
