@@ -1,0 +1,21 @@
+README.md
+  s_cfe1cc30602d60::t_7ccfddabb7cca2 5
+README-CN.md
+  s_cfe1cc30602d60::t_f75d6fb6d11706 6,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "511cdce2ffd91bd2212d51c2f46adc5ae5abdafb",
+  "prompts": {},
+  "sessions": {
+    "s_cfe1cc30602d60": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019ecf1a-eed3-7d43-bc4e-259a064a91a6",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "aizigao <weixiangzhe@live.com>"
+    }
+  }
+}
