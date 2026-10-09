@@ -25,6 +25,26 @@ English: [`README.md`](https://github.com/aizigao/pi-proxy-fetch/blob/master/REA
 - Node.js 20+
 - 已安装 Pi coding agent
 
+## 运行时与代理协议
+
+Pi 有两个运行时可执行文件。本扩展会按运行时选择实现，对外行为一致：
+
+| 运行时 | 实现 | 说明 |
+|---|---|---|
+| Bun（Pi 独立二进制，如 mise 安装的版本） | Bun 原生 `fetch` 的 `proxy` 选项 | `caCertPath` 作为 `tls.ca` 传入 |
+| Node.js（npm / SDK 方式启动的 Pi） | `undici` 的 `ProxyAgent` | `caCertPath` 作为 `requestTls.ca`，代理本身是 https 时同时作为 `proxyTls.ca` |
+
+Bun 下不用 `undici` 的原因：Bun 把 `undici` 注册为内置模块，扩展里 `import ... from "undici"` 拿到的是空实现（`ProxyAgent` 没有 `dispatch` / `close`，其 `fetch` 也会忽略 `dispatcher`）；即使绕过它加载真实 npm 包，`ProxyAgent` 在 Bun 下读取响应体仍会随机挂起（同样的代码在 Node 下正常）。因此 Bun 下改用原生 `fetch` 的 `proxy` 选项。
+
+### 代理协议支持
+
+| 协议 | 支持 | 说明 |
+|---|---|---|
+| `http://` / `https://` | 是 | 走 HTTP CONNECT，Clash mixed-port、Whistle 等均可用 |
+| `socks5://` | 否 | Bun 抛 `UnsupportedProxyProtocol`，`undici` 的 `ProxyAgent` 也不支持 SOCKS |
+
+Clash 这类客户端通常同时开放 mixed-port（HTTP + SOCKS5），把 `server` 写成 `http://127.0.0.1:7890` 即可。
+
 ## 安装
 
 ```bash
@@ -114,7 +134,7 @@ pi install npm:@aizigao/pi-proxy-fetch
 |---|---|---|
 | `name` | `string` | profile 名称，必须匹配 `^[A-Za-z_-]+$` |
 | `type` | `"proxy_server"` | 固定值 |
-| `server` | `string` | 必填代理地址，如 `socks5://127.0.0.1:7890` |
+| `server` | `string` | 必填代理地址，支持 `http://` / `https://`，如 `http://127.0.0.1:7890`（不支持 `socks5://`） |
 | `caCertPath` | `string?` | 可选 CA 证书路径。适合 Whistle 等自签证书代理 |
 
 ### `autoSwitch` 字段

@@ -24,6 +24,12 @@ let currentConfig: ProxyConfig | null = null;
 const agentCache = new Map<string, ProxyAgent>();
 const certCache = new Map<string, string>();
 
+// Pi runs on Bun, whose built-in "undici" module is a stub: its ProxyAgent is an
+// empty class, its fetch ignores `dispatcher`, and even the real npm undici never
+// finishes reading a response body through a ProxyAgent there. Bun's own fetch
+// supports per-request proxies, so proxying is delegated to it at runtime.
+const IS_BUN = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -148,7 +154,23 @@ export default function (pi: ExtensionAPI) {
       }
 
       const profile = findProxyProfile(config, result.profileName);
+
+      if (IS_BUN) {
+        const ca = profile?.caCertPath
+          ? certCache.get(expandHome(profile.caCertPath))
+          : undefined;
+
+        // `next` is the pipeline's underlying fetch; calling the patched global
+        // `fetch` here would re-enter this middleware.
+        return next(input, {
+          ...init,
+          proxy: result.server,
+          ...(ca ? { tls: { ca } } : {}),
+        } as RequestInit);
+      }
+
       const dispatcher = getAgent(result.server, profile?.caCertPath);
+
       return undiciFetch(
         input as Parameters<typeof undiciFetch>[0],
         { ...init, dispatcher } as Parameters<typeof undiciFetch>[1],

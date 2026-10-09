@@ -31,6 +31,26 @@ pi install npm:@aizigao/pi-proxy-fetch
 - Package: `@aizigao/pi-proxy-fetch`
 - npm: https://www.npmjs.com/package/@aizigao/pi-proxy-fetch
 
+## Runtime and proxy protocols
+
+Pi ships two runtime executables. This extension picks an implementation per runtime; behavior is identical from the outside:
+
+| Runtime | Implementation | Notes |
+|---|---|---|
+| Bun (Pi standalone binary, e.g. the version installed by mise) | Bun's native `fetch` with the `proxy` option | `caCertPath` is passed as `tls.ca` |
+| Node.js (Pi started via npm / SDK) | `undici` `ProxyAgent` | `caCertPath` is passed as `requestTls.ca`, and as `proxyTls.ca` as well when the proxy itself is https |
+
+Why `undici` is not used on Bun: Bun registers `undici` as a built-in module, so `import ... from "undici"` inside an extension returns an empty implementation (`ProxyAgent` has no `dispatch` / `close`, and its `fetch` ignores `dispatcher`). Even when the real npm package is loaded explicitly, `ProxyAgent` stalls unpredictably while reading response bodies on Bun (the same code is fine on Node). Bun therefore uses the native `fetch` `proxy` option instead.
+
+### Proxy protocol support
+
+| Protocol | Supported | Notes |
+|---|---|---|
+| `http://` / `https://` | yes | HTTP CONNECT; works with Clash mixed-port, Whistle, and similar |
+| `socks5://` | no | Bun throws `UnsupportedProxyProtocol`; undici's `ProxyAgent` has no SOCKS support either |
+
+Clash-style clients usually expose a mixed-port (HTTP + SOCKS5), so point `server` at `http://127.0.0.1:7890` instead.
+
 ## Configuration
 
 Recommended project-local config: `./.pi/proxy.json`
@@ -49,7 +69,7 @@ If neither config exists, a default global config is created at `~/.pi/agent/pro
     {
       "name": "my-clash",
       "type": "proxy_server",
-      "server": "socks5://127.0.0.1:7890"
+      "server": "http://127.0.0.1:7890"
     },
     {
       "name": "whistle",
@@ -118,7 +138,7 @@ If neither config exists, a default global config is created at `~/.pi/agent/pro
 |---|---|---|
 | `name` | `string` | Profile name; must match `^[A-Za-z_-]+$` |
 | `type` | `"proxy_server"` | Fixed value |
-| `server` | `string` | Required proxy URL, e.g. `socks5://127.0.0.1:7890` |
+| `server` | `string` | Required proxy URL; `http://` / `https://` only, e.g. `http://127.0.0.1:7890` (`socks5://` is not supported) |
 | `caCertPath` | `string?` | Optional CA certificate path, useful for Whistle-style self-signed proxies |
 
 ## `autoSwitch` fields
